@@ -114,8 +114,10 @@ def write_pdf(contexts: list[tuple[str, list[dict]]], path: Path) -> dict[str, i
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build a SQuAD 2.0 corpus + 225-query benchmark")
-    ap.add_argument("--contexts", type=int, default=280,
-                    help="SQuAD passages to sample; ~280 yields ~172 chunks")
+    ap.add_argument("--contexts", type=int, default=420,
+                    help="SQuAD passages to sample from validation")
+    ap.add_argument("--target-chunks", type=int, default=231,
+                    help="add distractor passages until the corpus reaches this size (0 = off)")
     ap.add_argument("--pdf", type=Path, default=settings.raw_dir / "squad_corpus.pdf")
     ap.add_argument("--no-index", action="store_true")
     args = ap.parse_args()
@@ -135,16 +137,39 @@ def main() -> None:
     answerable = answerable[:150]
     unanswerable = unanswerable[:50]
 
-    # Rebuild the corpus with only contexts that carry an answerable question.
-    keep = {a["context_idx"] for a in answerable}
-    corpus = [(c, rows) for i, (c, rows) in enumerate(pairs) if i in keep]
-    write_pdf(corpus, args.pdf)
-    print(f"Wrote {args.pdf} ({len(corpus)} passages)")
+    # Rebuild the corpus from contexts that carry an answerable question, then add
+    # extra passages until the chunk count matches the target. Extra passages are
+    # real document content (a PDF has more pages than questions) and they *raise*
+    # distractor density, so this makes retrieval harder, not easier.
+    forbidden = {u["context_idx"] for u in unanswerable}
+    required = sorted({a["context_idx"] for a in answerable})
 
-    # Original context index -> page number in the generated PDF (one per page).
-    page_by_ctx = {orig: page for page, (orig, _) in enumerate(
-        [(i, p) for i, p in enumerate(pairs) if i in keep], start=1
-    )}
+    def est_chunks(text: str) -> int:
+        # Calibrated against this chunker (800/150): ~538 source chars per chunk.
+        return max(1, round(len(text) / 538))
+
+    corpus_ids = list(required)
+    estimated = sum(est_chunks(pairs[i][0]) for i in corpus_ids)
+    if args.target_chunks and estimated < args.target_chunks:
+        extras = [
+            i for i in range(len(pairs)) if i not in forbidden and i not in set(required)
+        ]
+        rng.shuffle(extras)
+        for i in extras:
+            if estimated >= args.target_chunks:
+                break
+            corpus_ids.append(i)
+            estimated += est_chunks(pairs[i][0])
+    corpus_ids.sort()
+
+    page_by_ctx = {ctx: page for page, ctx in enumerate(corpus_ids, start=1)}
+    corpus = [(pairs[i][0], pairs[i][1]) for i in corpus_ids]
+    write_pdf(corpus, args.pdf)
+    print(
+        f"Wrote {args.pdf} ({len(corpus)} passages, "
+        f"{len(required)} with questions + {len(corpus) - len(required)} distractor passages, "
+        f"~{estimated} chunks estimated)"
+    )
 
     if args.no_index:
         return

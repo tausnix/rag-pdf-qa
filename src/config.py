@@ -46,10 +46,22 @@ class Settings:
     rrf_k: int = _int("RRF_K", 60)                     # Reciprocal Rank Fusion constant
     context_k: int = _int("CONTEXT_K", 5)              # chunks handed to the LLM
 
+    # --- reranking (cross-encoder) ---
+    rerank_model: str = os.getenv("RERANK_MODEL", "Xenova/ms-marco-MiniLM-L-6-v2")
+    rerank_top_n: int = _int("RERANK_TOP_N", 15)       # candidates scored by the cross-encoder
+    rerank_max_length: int = _int("RERANK_MAX_LENGTH", 384)
+
     # --- generation ---
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     temperature: float = _float("TEMPERATURE", 0.0)
+
+    # --- cost model (USD per 1M tokens, Gemini 2.0 Flash list price) ---
+    price_input_per_mtok: float = _float("PRICE_INPUT_PER_MTOK", 0.10)
+    price_output_per_mtok: float = _float("PRICE_OUTPUT_PER_MTOK", 0.40)
+
+    # --- faithfulness ---
+    faithfulness_min_overlap: float = _float("FAITHFULNESS_MIN_OVERLAP", 0.6)
 
     @property
     def collection_name(self) -> str:

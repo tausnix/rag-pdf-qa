@@ -6,12 +6,21 @@ RRF only uses *ranks*, so the two retrievers never need score normalisation.
 """
 from __future__ import annotations
 
+import functools
 import pickle
+import re
 from dataclasses import dataclass, field
+
+import numpy as np
 
 from .config import settings
 from .embeddings import Embedder
 from .ingest import tokenize
+
+
+def _normalise_query(query: str) -> str:
+    """Canonical form used as the query-embedding cache key."""
+    return " ".join(query.lower().split())
 
 
 def fuse_rrf(
@@ -40,6 +49,7 @@ class Hit:
     score: float
     rank_vector: int | None = None
     rank_bm25: int | None = None
+    rerank_score: float | None = None
 
 
 @dataclass
@@ -85,9 +95,28 @@ class Retriever:
         return self
 
     # ------------------------------------------------------------- retrieve
+    def _embed_query_uncached(self, normalised: str) -> np.ndarray:
+        return self._embedder.encode([normalised])
+
+    @property
+    def _embed_query(self):
+        """LRU-cached query embedding (same query twice = no encoder call)."""
+        cache = self.__dict__.get("_query_cache")
+        if cache is None:
+            cache = functools.lru_cache(maxsize=512)(self._embed_query_uncached)
+            self.__dict__["_query_cache"] = cache
+        return cache
+
+    def query_cache_info(self):
+        return self._embed_query.cache_info()
+
+    def clear_query_cache(self) -> None:
+        """Drop cached query embeddings (used between benchmark modes)."""
+        self._embed_query.cache_clear()
+
     def vector_search(self, query: str, k: int | None = None) -> list[Hit]:
         k = k or settings.top_k_vector
-        qvec = self._embedder.encode([query])
+        qvec = self._embed_query(_normalise_query(query))
         res = self._collection.query(
             query_embeddings=qvec.tolist(),
             n_results=k,

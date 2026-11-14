@@ -16,6 +16,11 @@ requests>=2.31             # raw Gemini REST fallback (no SDK required)
 # google-genai>=1.0        # optional: preferred SDK path if installed
 # google-generativeai>=0.8 # optional: legacy SDK, also supported
 
+# ---- cross-encoder reranking (opt-in: --mode rerank / --rerank) ----
+onnxruntime>=1.17          # int8 ms-marco MiniLM cross-encoder, no PyTorch
+tokenizers>=0.15           # fast (query, chunk) pair encoding
+huggingface_hub>=0.23      # one-time model download, then served from local cache
+
 # ---- benchmark construction ----
 datasets>=2.20             # SQuAD 2.0 loader  (only needed to rebuild the benchmark)
 reportlab>=4.2             # writes the corpus PDF (only needed to rebuild the corpus)

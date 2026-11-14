@@ -86,8 +86,11 @@ def _gemini_sdk(prompt: str) -> str | None:
         return None
 
 
-def _gemini_rest(prompt: str, retries: int = 3) -> str | None:
-    """Dependency-free REST fallback: works with just ``requests``."""
+def _gemini_rest(prompt: str, retries: int = 3) -> dict | None:
+    """Dependency-free REST fallback: works with just ``requests``.
+
+    Returns ``{"text": ..., "usage": {"input_tokens", "output_tokens"}}`` or None.
+    """
     if not settings.gemini_api_key:
         return None
 
@@ -114,7 +117,14 @@ def _gemini_rest(prompt: str, retries: int = 3) -> str | None:
                 continue
             r.raise_for_status()
             data = r.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            usage = data.get("usageMetadata") or {}
+            return {
+                "text": data["candidates"][0]["content"]["parts"][0]["text"].strip(),
+                "usage": {
+                    "input_tokens": int(usage.get("promptTokenCount", 0)),
+                    "output_tokens": int(usage.get("candidatesTokenCount", 0)),
+                },
+            }
         except Exception:
             if attempt == retries - 1:
                 return None
@@ -178,6 +188,81 @@ def _extractive(question: str, hits: list[Hit]) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Cost accounting
+# --------------------------------------------------------------------------- #
+def estimate_tokens(text: str) -> int:
+    """Rough token count: ~4 characters per token.
+
+    Used when the provider does not return usage metadata (SDK path, extractive
+    fallback). The REST path returns exact counts and takes precedence.
+    """
+    return max(1, int(round(len(text) / 4)))
+
+
+def cost_usd(input_tokens: int, output_tokens: int) -> float:
+    """USD cost for one call, from the configured per-million-token prices."""
+    return (
+        input_tokens / 1_000_000 * settings.price_input_per_mtok
+        + output_tokens / 1_000_000 * settings.price_output_per_mtok
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Faithfulness
+# --------------------------------------------------------------------------- #
+_NUMBER = re.compile(r"\b\d[\d,]*(?:\.\d+)?\b")
+_EXTRACTIVE_SUFFIX = re.compile(r"\s*\[extractive fallback[^\]]*\]", re.IGNORECASE)
+
+
+def _numbers(text: str) -> set[str]:
+    return {n.replace(",", "") for n in _NUMBER.findall(text)}
+
+
+def faithfulness(answer_text: str, hits: list[Hit]) -> dict:
+    """Lexical check that the answer is supported by the retrieved context.
+
+    Per answer sentence: content-word coverage against the best-matching context
+    sentence, *and* every number in the sentence must appear in the context. A
+    sentence passes when coverage >= ``FAITHFULNESS_MIN_OVERLAP`` and no number
+    is unsupported. This is a cheap proxy for entailment: it catches invented
+    figures and mismatched entities, but it will not catch a fluent distortion
+    that reuses the context's own words.
+    """
+    text = _EXTRACTIVE_SUFFIX.sub("", re.sub(r"\[p\.\d+\]", "", answer_text)).strip()
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if len(s.strip()) >= 25]
+    if not sentences:
+        return {"score": 0.0, "sentences": 0, "supported": 0,
+                "unsupported_numbers": sorted(_numbers(text)), "numeric_grounding": not _numbers(text)}
+
+    context_text = " ".join(h.text for h in hits)
+    context_numbers = _numbers(context_text)
+    context_sentences = [
+        s for h in hits for s in re.split(r"(?<=[.!?])\s+", h.text) if len(s.strip()) >= 20
+    ]
+
+    supported = 0
+    unsupported_numbers: set[str] = set()
+    for sentence in sentences:
+        tokens = _content_tokens(sentence)
+        coverage = 0.0
+        if tokens:
+            for candidate in context_sentences:
+                coverage = max(coverage, len(tokens & _content_tokens(candidate)) / len(tokens))
+        missing = _numbers(sentence) - context_numbers
+        unsupported_numbers |= missing
+        if coverage >= settings.faithfulness_min_overlap and not missing:
+            supported += 1
+
+    return {
+        "score": supported / len(sentences),
+        "sentences": len(sentences),
+        "supported": supported,
+        "unsupported_numbers": sorted(unsupported_numbers),
+        "numeric_grounding": not unsupported_numbers,
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Public API
 # --------------------------------------------------------------------------- #
 def is_refusal(text: str) -> bool:
@@ -193,14 +278,20 @@ def is_refusal(text: str) -> bool:
 
 
 def answer(question: str, hits: list[Hit], use_llm: bool = True) -> dict:
-    """Return ``{"answer", "citations", "refused", "used_llm"}``."""
+    """Return answer, citations, refusal flag and (for LLM calls) token usage."""
     prompt = build_prompt(question, hits)
 
     text = None
     used_llm = False
+    usage = None
     if use_llm and settings.gemini_api_key:
-        text = _gemini_rest(prompt) or _gemini_sdk(prompt)
-        used_llm = text is not None
+        result = _gemini_rest(prompt)
+        if result:
+            text, usage = result["text"], result["usage"]
+            used_llm = True
+        else:
+            text = _gemini_sdk(prompt)
+            used_llm = text is not None
 
     if text is None:
         text = _extractive(question, hits)
@@ -212,4 +303,21 @@ def answer(question: str, hits: list[Hit], use_llm: bool = True) -> dict:
             {h.page for h in hits[:3]}
         )
 
-    return {"answer": text, "citations": citations, "refused": refused, "used_llm": used_llm}
+    # Token accounting: exact usage from the API when available, otherwise an
+    # estimate over the same prompt/answer so cost can still be projected.
+    if used_llm:
+        input_tokens = (usage or {}).get("input_tokens") or estimate_tokens(prompt)
+        output_tokens = (usage or {}).get("output_tokens") or estimate_tokens(text)
+    else:
+        input_tokens = estimate_tokens(prompt)
+        output_tokens = estimate_tokens(text)
+
+    return {
+        "answer": text,
+        "citations": citations,
+        "refused": refused,
+        "used_llm": used_llm,
+        "usage": {"input_tokens": input_tokens, "output_tokens": output_tokens},
+        "cost_usd": cost_usd(input_tokens, output_tokens),
+        "billable": used_llm,
+    }

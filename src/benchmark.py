@@ -1,7 +1,7 @@
-"""Benchmark: Hit Rate@k, MRR@k, Answer-in-Context@k, abstention, latency.
+"""Benchmark: Hit Rate@k, MRR@k, Answer-in-Context@k, abstention, faithfulness, cost.
 
-    python -m src.benchmark                 # hybrid + vector-only, no LLM
-    python -m src.benchmark --llm           # include Gemini abstention scoring
+    python -m src.benchmark --mode all              # dense vs hybrid vs rerank
+    python -m src.benchmark --mode all --llm        # + Gemini abstention/faithfulness/cost
 
 Queries live in ``data/eval/queries.jsonl``, one JSON object per line:
 
@@ -10,6 +10,9 @@ Queries live in ``data/eval/queries.jsonl``, one JSON object per line:
      "type": "answerable" | "unanswerable" | "out_of_domain",
      "gold_chunk_ids": ["a1b2c3..."],   # required for answerable
      "gold_answer": "..."}              # optional, enables Answer-in-Context
+
+Latency is split into retrieval (embed + search + fuse) and rerank (cross-encoder),
+because they have completely different cost profiles.
 """
 from __future__ import annotations
 
@@ -22,6 +25,7 @@ from pathlib import Path
 
 from .config import settings
 from .generate import answer as generate_answer
+from .generate import faithfulness
 from .retrieve import Retriever, get_retriever
 
 _NORM = re.compile(r"[^a-z0-9 ]+")
@@ -34,7 +38,9 @@ def norm(text: str) -> str:
 def load_queries(path: Path) -> list[dict]:
     if not path.exists():
         raise SystemExit(f"No queries file at {path}. Build one with src.build_demo_corpus.")
-    queries = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    queries = [
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
     for q in queries:
         q.setdefault("type", "answerable")
         q.setdefault("gold_chunk_ids", [])
@@ -42,7 +48,7 @@ def load_queries(path: Path) -> list[dict]:
 
 
 # --------------------------------------------------------------------------- #
-# metrics
+# metric primitives
 # --------------------------------------------------------------------------- #
 def hit_at_k(ranked_ids: list[str], gold: set[str], k: int) -> bool:
     return bool(gold & set(ranked_ids[:k]))
@@ -82,24 +88,49 @@ def evaluate(
     hit_k: int = 3,
     mrr_k: int = 10,
     ctx_k: int = 5,
+    reranker=None,
 ) -> dict:
     answerable = [q for q in queries if q["type"] == "answerable"]
     negatives = [q for q in queries if q["type"] != "answerable"]
 
+    retriever.clear_query_cache()
     # warm-up (model load / first Chroma query), excluded from latency stats
     for _ in range(2):
         retriever.vector_search("warm up query")
+    if mode == "rerank" and reranker is not None:
+        reranker.score("warm up", ["warm up passage"])
 
-    hits_ok, rrs, aic_ok, latencies = [], [], [], []
-    refused_negatives, answered_negatives = 0, 0
+    hits_ok, rrs, aic_ok = [], [], []
+    latencies, retrieval_ms, rerank_ms = [], [], []
+    gen_latencies, faith_scores = [], []
+    refused_negatives = answered_negatives = 0
+    false_refusals = 0
+    in_tokens = out_tokens = 0
+    cost_total = 0.0
+    generated = 0
+    billable = False
 
     for q in queries:
         t0 = time.perf_counter()
-        if mode == "hybrid":
+        if mode == "rerank":
+            candidates = retriever.hybrid_search(q["question"], k=settings.rerank_top_n)
+            t1 = time.perf_counter()
+            ranked = reranker.rerank(q["question"], candidates, k=max(mrr_k, ctx_k))
+            t2 = time.perf_counter()
+            retrieval_ms.append((t1 - t0) * 1000.0)
+            rerank_ms.append((t2 - t1) * 1000.0)
+        elif mode == "hybrid":
             ranked = retriever.hybrid_search(q["question"], k=max(mrr_k, ctx_k))
+            t1 = time.perf_counter()
+            retrieval_ms.append((t1 - t0) * 1000.0)
+            rerank_ms.append(0.0)
         else:
             ranked = retriever.vector_search(q["question"], k=max(mrr_k, ctx_k))
-        latencies.append((time.perf_counter() - t0) * 1000.0)
+            t1 = time.perf_counter()
+            retrieval_ms.append((t1 - t0) * 1000.0)
+            rerank_ms.append(0.0)
+
+        latencies.append(retrieval_ms[-1] + rerank_ms[-1])
 
         ids = [h.chunk_id for h in ranked]
         if q["type"] == "answerable":
@@ -110,9 +141,23 @@ def evaluate(
                 aic_ok.append(
                     answer_in_context([h.text for h in ranked[:ctx_k]], q["gold_answer"])
                 )
-        elif use_llm:
+
+        if use_llm:
+            g0 = time.perf_counter()
             res = generate_answer(q["question"], ranked[:ctx_k], use_llm=True)
-            if res["refused"]:
+            gen_latencies.append((time.perf_counter() - g0) * 1000.0)
+            generated += 1
+            in_tokens += res["usage"]["input_tokens"]
+            out_tokens += res["usage"]["output_tokens"]
+            cost_total += res["cost_usd"]
+            billable = billable or res.get("billable", False)
+
+            if q["type"] == "answerable":
+                if res["refused"]:
+                    false_refusals += 1
+                else:
+                    faith_scores.append(faithfulness(res["answer"], ranked[:ctx_k])["score"])
+            elif res["refused"]:
                 refused_negatives += 1
             else:
                 answered_negatives += 1
@@ -130,25 +175,43 @@ def evaluate(
         "latency_p50_ms": statistics.median(latencies),
         "latency_p95_ms": pct(latencies, 0.95),
         "latency_mean_ms": statistics.fmean(latencies),
+        "retrieval_p50_ms": statistics.median(retrieval_ms),
+        "rerank_p50_ms": statistics.median(rerank_ms) if rerank_ms else 0.0,
     }
+
     if use_llm and negatives:
         out["abstention_accuracy"] = refused_negatives / len(negatives)
         out["negatives_refused"] = refused_negatives
         out["negatives_answered"] = answered_negatives
+        out["false_refusal_rate"] = false_refusals / n
+        out["faithfulness"] = (statistics.fmean(faith_scores) if faith_scores else None)
+        out["generation_p50_ms"] = statistics.median(gen_latencies) if gen_latencies else 0.0
+        out["tokens_per_query"] = {
+            "input": in_tokens / generated,
+            "output": out_tokens / generated,
+        } if generated else {"input": 0, "output": 0}
+        out["cost_per_1k_queries_usd"] = (cost_total / generated * 1000.0) if generated else 0.0
+        out["cost_basis"] = (
+            "actual API usage" if billable
+            else "projected from list price (no API call was made)"
+        )
+        out["generator"] = (
+            settings.gemini_model if settings.gemini_api_key else "extractive (no API key)"
+        )
+
     return out
 
 
 # --------------------------------------------------------------------------- #
 # reporting
 # --------------------------------------------------------------------------- #
-def _row(name: str, r: dict) -> str:
-    aic = r.get(f"answer_in_context@{settings.context_k}")
-    aic_s = f"{aic * 100:.1f}%" if aic is not None else "n/a"
-    abst = r.get("abstention_accuracy")
-    abst_s = f"{abst * 100:.1f}%" if abst is not None else "n/a"
+def _row(name: str, r: dict, ctx_k: int) -> str:
+    aic = r.get(f"answer_in_context@{ctx_k}")
+    fmt = lambda v, suffix="%": f"{v * 100:.1f}{suffix}" if v is not None else "n/a"  # noqa: E731
     return (
-        f"| {name} | {r['hit_rate@3'] * 100:.1f}% | {r['mrr@10'] * 100:.1f}% | "
-        f"{aic_s} | {abst_s} | {r['latency_p50_ms']:.1f} ms | {r['latency_p95_ms']:.1f} ms |"
+        f"| {name} | {fmt(r['hit_rate@3'])} | {fmt(r['mrr@10'])} | {fmt(aic)} | "
+        f"{fmt(r.get('abstention_accuracy'))} | {fmt(r.get('faithfulness'))} | "
+        f"{r['latency_p50_ms']:.1f} ms | {r['latency_p95_ms']:.1f} ms |"
     )
 
 
@@ -156,36 +219,88 @@ def write_report(results: dict, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(results, indent=2), encoding="utf-8")
 
+    c = results["config"]
     md = [
         "# Retrieval benchmark",
         "",
         f"- Corpus chunks: **{results['corpus']['chunks']}**",
         f"- Embedder: `{results['corpus']['embedder']}`",
-        f"- Chunking: {results['config']['chunk_size']} chars / "
-        f"{results['config']['chunk_overlap']} overlap",
-        f"- RRF k: {results['config']['rrf_k']} · context k: {results['config']['context_k']}",
-        f"- Generator: {results['config']['generator']}",
-        f"- Queries: {results['splits']['answerable']} answerable · "
-        f"{results['splits']['unanswerable']} unanswerable · "
+        f"- Chunking: {c['chunk_size']} chars / {c['chunk_overlap']} overlap",
+        f"- RRF k: {c['rrf_k']} | context k: {c['context_k']} | rerank top-n: {c['rerank_top_n']}",
+        f"- Generator: {c['generator']}",
+        f"- Queries: {results['splits']['answerable']} answerable | "
+        f"{results['splits']['unanswerable']} unanswerable | "
         f"{results['splits']['out_of_domain']} out-of-domain",
         "",
-        "| Retriever | Hit@3 | MRR@10 | Ans-in-Context@5 | Abstention | p50 latency | p95 latency |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Retriever | Hit@3 | MRR@10 | Ans-in-Context@5 | Abstention | Faithfulness | p50 | p95 |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
-    if "vector_only" in results:
-        md.append(_row("MiniLM vector only", results["vector_only"]))
-    if "hybrid" in results:
-        md.append(_row("Hybrid MiniLM + BM25 (RRF)", results["hybrid"]))
-    md.append("")
-    md.append("> Latency is **retrieval only** (embed + search + fuse), measured after warm-up.")
+    for key, label in (
+        ("vector_only", "MiniLM dense"),
+        ("hybrid", "Hybrid MiniLM + BM25 (RRF)"),
+        ("rerank", f"Hybrid + cross-encoder rerank (top {c['rerank_top_n']})"),
+    ):
+        if key in results:
+            md.append(_row(label, results[key], c["context_k"]))
+
+    md += ["", "## Latency breakdown", "", "| Retriever | retrieval p50 | rerank p50 | total p50 | p95 |",
+           "|---|---:|---:|---:|---:|"]
+    for key, label in (
+        ("vector_only", "MiniLM dense"),
+        ("hybrid", "Hybrid RRF"),
+        ("rerank", "Hybrid + rerank"),
+    ):
+        if key in results:
+            r = results[key]
+            md.append(
+                f"| {label} | {r['retrieval_p50_ms']:.1f} ms | {r['rerank_p50_ms']:.1f} ms | "
+                f"{r['latency_p50_ms']:.1f} ms | {r['latency_p95_ms']:.1f} ms |"
+            )
+
+    if "hybrid" in results and "rerank" in results:
+        h, rr = results["hybrid"], results["rerank"]
+        md += [
+            "",
+            "## Rerank lift over RRF",
+            "",
+            f"- Hit@3: {(rr['hit_rate@3'] - h['hit_rate@3']) * 100:+.1f} pts",
+            f"- MRR@10: {(rr['mrr@10'] - h['mrr@10']) * 100:+.1f} pts",
+            f"- Added latency: {rr['rerank_p50_ms']:.1f} ms per query",
+        ]
+    if any("cost_per_1k_queries_usd" in results[k] for k in results if isinstance(results[k], dict)):
+        r = next(results[k] for k in ("rerank", "hybrid", "vector_only") if k in results)
+        if "cost_per_1k_queries_usd" in r:
+            md += [
+                "",
+                "## Generation cost",
+                "",
+                f"- Generator: {r['generator']}",
+                f"- Tokens/query: {r['tokens_per_query']['input']:.0f} in / "
+                f"{r['tokens_per_query']['output']:.0f} out",
+                f"- Cost per 1,000 queries: **${r['cost_per_1k_queries_usd']:.2f}**",
+                f"- Generation p50: {r['generation_p50_ms']:.0f} ms",
+            ]
+
+    md += ["", "> Latency is split: retrieval = embed + search + fuse; "
+                "rerank = cross-encoder over the candidates."]
     path.with_suffix(".md").write_text("\n".join(md), encoding="utf-8")
+
+
+MODES = {
+    "vector_only": "vector",
+    "hybrid": "hybrid",
+    "rerank": "rerank",
+}
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Evaluate retrieval quality on a fixed query set")
     ap.add_argument("--queries", type=Path, default=settings.eval_dir / "queries.jsonl")
-    ap.add_argument("--mode", choices=["both", "vector", "hybrid"], default="both")
-    ap.add_argument("--llm", action="store_true", help="also score abstention with Gemini")
+    ap.add_argument(
+        "--mode", choices=["all", "both", "vector", "hybrid", "rerank"], default="all",
+        help="'all' = dense + hybrid + rerank",
+    )
+    ap.add_argument("--llm", action="store_true", help="score abstention/faithfulness/cost with Gemini")
     ap.add_argument("--limit", type=int, default=0, help="use only the first N queries")
     ap.add_argument("--out", type=Path, default=settings.reports_dir / "benchmark.json")
     args = ap.parse_args()
@@ -194,8 +309,25 @@ def main() -> None:
     if args.limit:
         queries = queries[: args.limit]
 
-    chunks = [json.loads(l) for l in settings.chunks_jsonl.read_text(encoding="utf-8").splitlines() if l.strip()]
+    chunks = [
+        json.loads(line)
+        for line in settings.chunks_jsonl.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     retriever = get_retriever()
+    reranker = None
+    if args.mode in ("all", "rerank"):
+        from .rerank import get_reranker
+
+        reranker = get_reranker()
+
+    selected = (
+        ["vector_only", "hybrid", "rerank"] if args.mode == "all"
+        else ["vector_only", "hybrid"] if args.mode == "both"
+        else ["vector_only"] if args.mode == "vector"
+        else ["hybrid"] if args.mode == "hybrid"
+        else ["rerank"]
+    )
 
     results: dict = {
         "corpus": {
@@ -210,7 +342,9 @@ def main() -> None:
             "top_k_bm25": settings.top_k_bm25,
             "rrf_k": settings.rrf_k,
             "context_k": settings.context_k,
-            "generator": settings.gemini_model if (args.llm and settings.gemini_api_key) else "extractive (no LLM)",
+            "rerank_top_n": settings.rerank_top_n,
+            "generator": settings.gemini_model if (args.llm and settings.gemini_api_key)
+            else "extractive (no LLM)",
         },
         "splits": {
             "answerable": sum(1 for q in queries if q["type"] == "answerable"),
@@ -219,19 +353,25 @@ def main() -> None:
         },
     }
 
-    if args.mode in ("both", "vector"):
-        results["vector_only"] = evaluate(queries, retriever, "vector", args.llm)
-    if args.mode in ("both", "hybrid"):
-        results["hybrid"] = evaluate(queries, retriever, "hybrid", args.llm)
-    if args.mode == "both":
-        v, h = results["vector_only"], results["hybrid"]
-        results["delta"] = {
-            "hit_rate@3": h["hit_rate@3"] - v["hit_rate@3"],
-            "mrr@10": h["mrr@10"] - v["mrr@10"],
+    for key in selected:
+        results[key] = evaluate(
+            queries, retriever, MODES[key], args.llm, reranker=reranker
+        )
+
+    if "hybrid" in results and "rerank" in results:
+        results["delta_rerank_vs_hybrid"] = {
+            "hit_rate@3": results["rerank"]["hit_rate@3"] - results["hybrid"]["hit_rate@3"],
+            "mrr@10": results["rerank"]["mrr@10"] - results["hybrid"]["mrr@10"],
+            "latency_ms": results["rerank"]["latency_p50_ms"] - results["hybrid"]["latency_p50_ms"],
         }
 
     write_report(results, args.out)
-    print(json.dumps(results, indent=2))
+    summary = {
+        k: {m: round(v, 4) if isinstance(v, float) else v
+            for m, v in results[k].items() if m in ("hit_rate@3", "mrr@10", "latency_p50_ms")}
+        for k in selected
+    }
+    print(json.dumps(summary, indent=2))
     print(f"\nWrote {args.out} and {args.out.with_suffix('.md')}")
 
 

@@ -11,6 +11,7 @@
     "top_k_bm25": 10,
     "rrf_k": 60,
     "context_k": 5,
+    "rerank_top_n": 15,
     "generator": "extractive (no LLM)"
   },
   "splits": {
@@ -27,9 +28,24 @@
     "hit_rate@3": 0.9266666666666666,
     "mrr@10": 0.7512962962962962,
     "answer_in_context@5": 0.9866666666666667,
-    "latency_p50_ms": 13.551000040024519,
-    "latency_p95_ms": 17.411099979653955,
-    "latency_mean_ms": 13.776173335758763
+    "latency_p50_ms": 11.19360001757741,
+    "latency_p95_ms": 14.1478999867104,
+    "latency_mean_ms": 11.597586668665624,
+    "retrieval_p50_ms": 11.19360001757741,
+    "rerank_p50_ms": 0.0,
+    "abstention_accuracy": 1.0,
+    "negatives_refused": 75,
+    "negatives_answered": 0,
+    "false_refusal_rate": 0.013333333333333334,
+    "faithfulness": 1.0,
+    "generation_p50_ms": 0.4605999565683305,
+    "tokens_per_query": {
+      "input": 995.7022222222222,
+      "output": 24.36888888888889
+    },
+    "cost_per_1k_queries_usd": 0.10931777777777779,
+    "cost_basis": "projected from list price (no API call was made)",
+    "generator": "extractive (no API key)"
   },
   "hybrid": {
     "mode": "hybrid",
@@ -40,12 +56,56 @@
     "hit_rate@3": 0.9266666666666666,
     "mrr@10": 0.7448412698412699,
     "answer_in_context@5": 0.9933333333333333,
-    "latency_p50_ms": 14.40260000526905,
-    "latency_p95_ms": 17.778900044504553,
-    "latency_mean_ms": 14.539168888651249
+    "latency_p50_ms": 11.892199981957674,
+    "latency_p95_ms": 14.971200027503073,
+    "latency_mean_ms": 11.72725866548717,
+    "retrieval_p50_ms": 11.892199981957674,
+    "rerank_p50_ms": 0.0,
+    "abstention_accuracy": 1.0,
+    "negatives_refused": 75,
+    "negatives_answered": 0,
+    "false_refusal_rate": 0.0,
+    "faithfulness": 1.0,
+    "generation_p50_ms": 0.3968999953940511,
+    "tokens_per_query": {
+      "input": 999.2133333333334,
+      "output": 24.57777777777778
+    },
+    "cost_per_1k_queries_usd": 0.10975244444444444,
+    "cost_basis": "projected from list price (no API call was made)",
+    "generator": "extractive (no API key)"
   },
-  "delta": {
-    "hit_rate@3": 0.0,
-    "mrr@10": -0.00645502645502638
+  "rerank": {
+    "mode": "rerank",
+    "n_queries": 225,
+    "n_answerable": 150,
+    "n_unanswerable": 50,
+    "n_out_of_domain": 25,
+    "hit_rate@3": 1.0,
+    "mrr@10": 0.8833333333333333,
+    "answer_in_context@5": 1.0,
+    "latency_p50_ms": 1084.5668999827467,
+    "latency_p95_ms": 1386.983800039161,
+    "latency_mean_ms": 1056.411156001656,
+    "retrieval_p50_ms": 12.28560000890866,
+    "rerank_p50_ms": 1072.573299985379,
+    "abstention_accuracy": 1.0,
+    "negatives_refused": 75,
+    "negatives_answered": 0,
+    "false_refusal_rate": 0.0,
+    "faithfulness": 1.0,
+    "generation_p50_ms": 0.4304000176489353,
+    "tokens_per_query": {
+      "input": 1015.1022222222222,
+      "output": 24.573333333333334
+    },
+    "cost_per_1k_queries_usd": 0.11133955555555554,
+    "cost_basis": "projected from list price (no API call was made)",
+    "generator": "extractive (no API key)"
+  },
+  "delta_rerank_vs_hybrid": {
+    "hit_rate@3": 0.07333333333333336,
+    "mrr@10": 0.13849206349206344,
+    "latency_ms": 1072.674700000789
   }
 }
