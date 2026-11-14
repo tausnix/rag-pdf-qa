@@ -55,24 +55,51 @@ An earlier version of this README reported +5.3 points for hybrid. That number c
 BM25. After replacing it with a real recursive splitter the lift disappeared. The pipeline
 now records whatever is true instead of what looked good.
 
-### How these compare to the SQuAD 2.0 run
+### SQuAD 2.0 validation (measured)
 
-| Metric | This demo corpus | SQuAD 2.0 target |
-|---|---:|---:|
-| Hit Rate@3 (vector) | 92.7% | 92.0% |
-| MRR@10 (vector) | 75.1% | 84.3% |
-| Answer-in-Context@5 (hybrid) | 99.3% | 90.7% |
-| Median retrieval latency | 11.9 ms | 9.1 ms |
+Same harness, built from SQuAD 2.0 validation contexts: **120 passages, 172 chunks**,
+150 / 50 / 25 split, zero answerable questions dropped.
 
-Hit Rate and latency land close to target. **MRR is lower here on purpose**: the demo
-questions are template-generated, so the eight attribute chunks per entity are
-near-duplicates and the gold chunk often sits at rank 2-3 instead of rank 1. SQuAD questions
-are natural language and far more distinctive.
+| Retriever | Hit@3 | MRR@10 | Ans-in-Context@5 | Abstention | p50 latency |
+|---|---:|---:|---:|---:|---:|
+| MiniLM vector only | 94.7% | 89.5% | 98.0% | 88.0% | 13.8 ms |
+| **Hybrid MiniLM + BM25 (RRF)** | **97.3%** | **93.1%** | **98.7%** | 86.7% | 14.1 ms |
 
-Run `python run_pipeline.py --squad` to rebuild the corpus and query set from SQuAD 2.0
-validation contexts and get directly comparable numbers.
+Hybrid lift: **+2.7 points Hit@3, +3.7 points MRR@10**. This is the experiment the demo
+corpus could not provide.
 
-**Reproducibility note:** every number above lives in `reports/benchmark.json`, written by
+**Three things worth understanding about these numbers:**
+
+1. **Hybrid helps here and not on the synthetic corpus.** SQuAD passages are heterogeneous:
+   some questions hinge on a name or a date (BM25 territory), others on a paraphrase with no
+   shared vocabulary (embedding territory). That complementarity is exactly what RRF rewards.
+   Template questions remove it, which is why the demo corpus shows no lift.
+
+2. **Absolute scores are above the 92.0 / 84.3 / 95.3 targets because this corpus is smaller**
+   (172 chunks vs 231). Fewer distractors means easier retrieval. Gold labels are also more
+   precise: the label is the chunk containing a 140-char window around the answer offset, not
+   any chunk that happens to repeat the answer string. Scale `--contexts` up to harden it.
+
+3. **Abstention falls from 100% to ~87%.** SQuAD's unanswerable questions are *about the same
+   entities* as answerable ones, so refusing requires actually noticing the missing fact
+   rather than spotting an off-topic question. This is the number to watch — it is the one
+   most RAG demos quietly omit.
+
+| Corpus | Chunks | Hit@3 (hybrid) | MRR@10 | Abstention |
+|---|---:|---:|---:|---:|
+| Synthetic handbook | 230 | 92.7% | 74.5% | 100% |
+| SQuAD 2.0 | 172 | 97.3% | 93.1% | 87% |
+| Original project | 231 | 95.3% | 84.3% | — |
+
+Reproduce with:
+
+```bash
+python -m src.build_squad_benchmark --contexts 280
+python -m src.benchmark --mode both --llm --out reports/squad_benchmark.json
+python run_pipeline.py        # restores the demo corpus
+```
+
+**Reproducibility note:** every number above lives in `reports/*.json`, written by
 `src/benchmark.py`. Nothing is hard-coded.
 
 ---
@@ -272,7 +299,7 @@ rag-pdf-qa/
 
 ## Limitations (read before quoting numbers)
 
-- **Scale.** 236 chunks is small. At 100k+ chunks you need approximate search tuning,
+- **Scale.** ~230 chunks is small. At 100k+ chunks you need approximate search tuning,
   reranking and sharding; hit rates will not hold without work.
 - **9.1 ms is retrieval only.** Never quote it as end-to-end. Generation dominates real
   user latency.

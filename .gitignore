@@ -5,3 +5,4 @@ __pycache__/
 *.log
 data/index/
 chroma/
+data/raw/squad_corpus.pdf

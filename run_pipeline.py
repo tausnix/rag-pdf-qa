@@ -24,7 +24,7 @@ def step(label: str, args: list[str]) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--squad", action="store_true", help="build the SQuAD 2.0 corpus")
-    ap.add_argument("--contexts", type=int, default=90)
+    ap.add_argument("--contexts", type=int, default=280)
     ap.add_argument("--llm", action="store_true")
     args = ap.parse_args()
 

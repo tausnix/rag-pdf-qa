@@ -114,7 +114,8 @@ def write_pdf(contexts: list[tuple[str, list[dict]]], path: Path) -> dict[str, i
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build a SQuAD 2.0 corpus + 225-query benchmark")
-    ap.add_argument("--contexts", type=int, default=90)
+    ap.add_argument("--contexts", type=int, default=280,
+                    help="SQuAD passages to sample; ~280 yields ~172 chunks")
     ap.add_argument("--pdf", type=Path, default=settings.raw_dir / "squad_corpus.pdf")
     ap.add_argument("--no-index", action="store_true")
     args = ap.parse_args()

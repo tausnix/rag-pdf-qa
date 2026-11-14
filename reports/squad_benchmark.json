@@ -1,0 +1,57 @@
+{
+  "corpus": {
+    "chunks": 172,
+    "pages": 120,
+    "embedder": "onnx:all-MiniLM-L6-v2"
+  },
+  "config": {
+    "chunk_size": 800,
+    "chunk_overlap": 150,
+    "top_k_vector": 10,
+    "top_k_bm25": 10,
+    "rrf_k": 60,
+    "context_k": 5,
+    "generator": "extractive (no LLM)"
+  },
+  "splits": {
+    "answerable": 150,
+    "unanswerable": 50,
+    "out_of_domain": 25
+  },
+  "vector_only": {
+    "mode": "vector",
+    "n_queries": 225,
+    "n_answerable": 150,
+    "n_unanswerable": 50,
+    "n_out_of_domain": 25,
+    "hit_rate@3": 0.9466666666666667,
+    "mrr@10": 0.8946666666666666,
+    "answer_in_context@5": 0.98,
+    "latency_p50_ms": 16.55699999537319,
+    "latency_p95_ms": 43.74930000631139,
+    "latency_mean_ms": 22.09836666808567,
+    "abstention_accuracy": 0.88,
+    "negatives_refused": 66,
+    "negatives_answered": 9
+  },
+  "hybrid": {
+    "mode": "hybrid",
+    "n_queries": 225,
+    "n_answerable": 150,
+    "n_unanswerable": 50,
+    "n_out_of_domain": 25,
+    "hit_rate@3": 0.9733333333333334,
+    "mrr@10": 0.9312407407407407,
+    "answer_in_context@5": 0.9866666666666667,
+    "latency_p50_ms": 15.428999962750822,
+    "latency_p95_ms": 26.79309999803081,
+    "latency_mean_ms": 16.520368442353274,
+    "abstention_accuracy": 0.8666666666666667,
+    "negatives_refused": 65,
+    "negatives_answered": 10
+  },
+  "delta": {
+    "hit_rate@3": 0.026666666666666727,
+    "mrr@10": 0.03657407407407409
+  }
+}

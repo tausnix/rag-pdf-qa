@@ -27,12 +27,9 @@
     "hit_rate@3": 0.9266666666666666,
     "mrr@10": 0.7512962962962962,
     "answer_in_context@5": 0.9866666666666667,
-    "latency_p50_ms": 11.90899999346584,
-    "latency_p95_ms": 15.081399993505329,
-    "latency_mean_ms": 12.699599999468774,
-    "abstention_accuracy": 1.0,
-    "negatives_refused": 75,
-    "negatives_answered": 0
+    "latency_p50_ms": 13.551000040024519,
+    "latency_p95_ms": 17.411099979653955,
+    "latency_mean_ms": 13.776173335758763
   },
   "hybrid": {
     "mode": "hybrid",
@@ -43,12 +40,9 @@
     "hit_rate@3": 0.9266666666666666,
     "mrr@10": 0.7448412698412699,
     "answer_in_context@5": 0.9933333333333333,
-    "latency_p50_ms": 14.339500048663467,
-    "latency_p95_ms": 16.674900020007044,
-    "latency_mean_ms": 14.50991600079255,
-    "abstention_accuracy": 1.0,
-    "negatives_refused": 75,
-    "negatives_answered": 0
+    "latency_p50_ms": 14.40260000526905,
+    "latency_p95_ms": 17.778900044504553,
+    "latency_mean_ms": 14.539168888651249
   },
   "delta": {
     "hit_rate@3": 0.0,
