@@ -1,0 +1,11 @@
+{
+  "corpus": "demo_handbook.pdf",
+  "chunks": 230,
+  "pages": 61,
+  "splits": {
+    "answerable": 150,
+    "unanswerable": 50,
+    "out_of_domain": 25
+  },
+  "gold_rule": "gold_chunk = chunk containing the exact fact sentence; falls back to a chunk containing the answer value"
+}

@@ -1,0 +1,225 @@
+{"id": "a001", "question": "What was the reported annual budget for Ember Point?", "type": "answerable", "gold_chunk_ids": ["4b5d3dcd6d66ba07"], "gold_answer": "USD 114 million"}
+{"id": "a002", "question": "What was the reported compliance score for Sable Works?", "type": "answerable", "gold_chunk_ids": ["a863f6f66060e0a1"], "gold_answer": "70 out of 100"}
+{"id": "a003", "question": "What was the reported energy consumption for Meridian Depot?", "type": "answerable", "gold_chunk_ids": ["551c12a63cd9c02a"], "gold_answer": "4935 megawatt hours"}
+{"id": "a004", "question": "What was the reported compliance score for Vantage Annex?", "type": "answerable", "gold_chunk_ids": ["f43073d996cade5c", "67094aa5a354b507"], "gold_answer": "71 out of 100"}
+{"id": "a005", "question": "What was the reported median response time for Juniper Facility?", "type": "answerable", "gold_chunk_ids": ["a200c4d05637aa83"], "gold_answer": "783 milliseconds"}
+{"id": "a006", "question": "What was the reported compliance score for Cobalt Ridge?", "type": "answerable", "gold_chunk_ids": ["1253f698a31fd11d"], "gold_answer": "74 out of 100"}
+{"id": "a007", "question": "What was the reported energy consumption for Ivory Quay?", "type": "answerable", "gold_chunk_ids": ["6f94b87a082a93b8"], "gold_answer": "20204 megawatt hours"}
+{"id": "a008", "question": "What was the reported retention rate for Kestrel Terminal?", "type": "answerable", "gold_chunk_ids": ["1be296dd31280c3c"], "gold_answer": "94 percent"}
+{"id": "a009", "question": "What was the reported median response time for Sable Works?", "type": "answerable", "gold_chunk_ids": ["97420593da199f28"], "gold_answer": "304 milliseconds"}
+{"id": "a010", "question": "What was the reported energy consumption for Umber Works?", "type": "answerable", "gold_chunk_ids": ["439d9746349a70cc", "812e96fafd46a017"], "gold_answer": "32268 megawatt hours"}
+{"id": "a011", "question": "What was the reported compliance score for Zenith Bunker?", "type": "answerable", "gold_chunk_ids": ["f391080b17cbdabb", "8bd8d3dd82e14af9"], "gold_answer": "74 out of 100"}
+{"id": "a012", "question": "What was the reported energy consumption for Kestrel Terminal?", "type": "answerable", "gold_chunk_ids": ["11838771bd452a2d"], "gold_answer": "18654 megawatt hours"}
+{"id": "a013", "question": "What was the reported retention rate for Sable Works?", "type": "answerable", "gold_chunk_ids": ["a863f6f66060e0a1"], "gold_answer": "80 percent"}
+{"id": "a014", "question": "What was the reported compliance score for Linden Terminal?", "type": "answerable", "gold_chunk_ids": ["53652d614fa40e82", "98ce9985cc965183"], "gold_answer": "78 out of 100"}
+{"id": "a015", "question": "What was the reported headcount for Pinehurst Site?", "type": "answerable", "gold_chunk_ids": ["ee8f23eb23c4c14f"], "gold_answer": "2411 employees"}
+{"id": "a016", "question": "What was the reported compliance score for Tamarack Works?", "type": "answerable", "gold_chunk_ids": ["970971dcd6356fb8"], "gold_answer": "63 out of 100"}
+{"id": "a017", "question": "What was the reported headcount for Vantage Annex?", "type": "answerable", "gold_chunk_ids": ["a915d4ab1c9202d9"], "gold_answer": "3064 employees"}
+{"id": "a018", "question": "What was the reported retention rate for Willow Reach?", "type": "answerable", "gold_chunk_ids": ["d04e7cafc34b7fed"], "gold_answer": "72 percent"}
+{"id": "a019", "question": "What was the reported headcount for Sable Works?", "type": "answerable", "gold_chunk_ids": ["d418834538eb8b87"], "gold_answer": "1292 employees"}
+{"id": "a020", "question": "What was the reported compliance score for Redwood Vault?", "type": "answerable", "gold_chunk_ids": ["68a0b5cd349d469b"], "gold_answer": "73 out of 100"}
+{"id": "a021", "question": "What was the reported headcount for Umber Works?", "type": "answerable", "gold_chunk_ids": ["3063798b429347d3"], "gold_answer": "2576 employees"}
+{"id": "a022", "question": "What was the reported annual budget for Elmsworth Depot?", "type": "answerable", "gold_chunk_ids": ["03eb1cab9434ab5d"], "gold_answer": "USD 67 million"}
+{"id": "a023", "question": "What was the reported retention rate for Yarrow Campus?", "type": "answerable", "gold_chunk_ids": ["de4508a84f94f8de"], "gold_answer": "95 percent"}
+{"id": "a024", "question": "What was the reported throughput for Kelvin Yard?", "type": "answerable", "gold_chunk_ids": ["90e96ad6d3bc97b1"], "gold_answer": "2279 tonnes per day"}
+{"id": "a025", "question": "What was the reported retention rate for Zephyr Station?", "type": "answerable", "gold_chunk_ids": ["0137194c87525453"], "gold_answer": "78 percent"}
+{"id": "a026", "question": "What was the reported median response time for Quarry Nine?", "type": "answerable", "gold_chunk_ids": ["71e91e069cc759bf"], "gold_answer": "647 milliseconds"}
+{"id": "a027", "question": "What was the reported headcount for Meridian Depot?", "type": "answerable", "gold_chunk_ids": ["a3b5c9f52671c257"], "gold_answer": "44 employees"}
+{"id": "a028", "question": "What was the reported retention rate for Kestrel Terminal?", "type": "answerable", "gold_chunk_ids": ["0dc45ef5cc420921"], "gold_answer": "89 percent"}
+{"id": "a029", "question": "What was the reported compliance score for Norvik Plant?", "type": "answerable", "gold_chunk_ids": ["ecfc25f3a944a427"], "gold_answer": "66 out of 100"}
+{"id": "a030", "question": "What was the reported retention rate for Cobalt Ridge?", "type": "answerable", "gold_chunk_ids": ["1253f698a31fd11d"], "gold_answer": "83 percent"}
+{"id": "a031", "question": "What was the reported throughput for Quarry Nine?", "type": "answerable", "gold_chunk_ids": ["c720ebef649dfff1"], "gold_answer": "6811 tonnes per day"}
+{"id": "a032", "question": "What was the reported open audit findings for Dunmore Plant?", "type": "answerable", "gold_chunk_ids": ["443a53261873d0d1", "83291de93236de6a"], "gold_answer": "29 findings"}
+{"id": "a033", "question": "What was the reported open audit findings for Juniper Facility?", "type": "answerable", "gold_chunk_ids": ["a54bc0c4322d0987"], "gold_answer": "15 findings"}
+{"id": "a034", "question": "What was the reported compliance score for Tamarisk Yard?", "type": "answerable", "gold_chunk_ids": ["50c3ec8ced96ab4a", "6962f86c2e7b3690"], "gold_answer": "82 out of 100"}
+{"id": "a035", "question": "What was the reported throughput for Ashcombe Mill?", "type": "answerable", "gold_chunk_ids": ["16943aad8b74b1df"], "gold_answer": "630 tonnes per day"}
+{"id": "a036", "question": "What was the reported open audit findings for Willow Reach?", "type": "answerable", "gold_chunk_ids": ["d04e7cafc34b7fed"], "gold_answer": "8 findings"}
+{"id": "a037", "question": "What was the reported open audit findings for Calder Wharf?", "type": "answerable", "gold_chunk_ids": ["3c02df45747542c4", "c3f8fe6344940bf9"], "gold_answer": "5 findings"}
+{"id": "a038", "question": "What was the reported annual budget for Halden Institute?", "type": "answerable", "gold_chunk_ids": ["07bba68b9f7f4e9a"], "gold_answer": "USD 171 million"}
+{"id": "a039", "question": "What was the reported annual budget for Jasper Flats?", "type": "answerable", "gold_chunk_ids": ["5458771fab7540a0"], "gold_answer": "USD 175 million"}
+{"id": "a040", "question": "What was the reported retention rate for Tamarack Works?", "type": "answerable", "gold_chunk_ids": ["970971dcd6356fb8"], "gold_answer": "88 percent"}
+{"id": "a041", "question": "What was the reported energy consumption for Dunmore Plant?", "type": "answerable", "gold_chunk_ids": ["773c59453186752f"], "gold_answer": "27593 megawatt hours"}
+{"id": "a042", "question": "What was the reported throughput for Thornfield Site?", "type": "answerable", "gold_chunk_ids": ["25a04faef1da2cae"], "gold_answer": "7505 tonnes per day"}
+{"id": "a043", "question": "What was the reported open audit findings for Tamarack Works?", "type": "answerable", "gold_chunk_ids": ["1be8256b080b14e9"], "gold_answer": "33 findings"}
+{"id": "a044", "question": "What was the reported energy consumption for Xenia Plant?", "type": "answerable", "gold_chunk_ids": ["462f513fcf1fc13d"], "gold_answer": "1477 megawatt hours"}
+{"id": "a045", "question": "What was the reported energy consumption for Quarry Nine?", "type": "answerable", "gold_chunk_ids": ["c720ebef649dfff1"], "gold_answer": "12972 megawatt hours"}
+{"id": "a046", "question": "What was the reported compliance score for Kestrel Terminal?", "type": "answerable", "gold_chunk_ids": ["1be296dd31280c3c"], "gold_answer": "96 out of 100"}
+{"id": "a047", "question": "What was the reported energy consumption for Kestrel Terminal?", "type": "answerable", "gold_chunk_ids": ["501b029bba0eef40"], "gold_answer": "13642 megawatt hours"}
+{"id": "a048", "question": "What was the reported median response time for Tamarack Works?", "type": "answerable", "gold_chunk_ids": ["31d680f30e15faf6"], "gold_answer": "287 milliseconds"}
+{"id": "a049", "question": "What was the reported median response time for Vantage Annex?", "type": "answerable", "gold_chunk_ids": ["a915d4ab1c9202d9"], "gold_answer": "51 milliseconds"}
+{"id": "a050", "question": "What was the reported retention rate for Thornfield Site?", "type": "answerable", "gold_chunk_ids": ["21eaee2d83af485b"], "gold_answer": "78 percent"}
+{"id": "a051", "question": "What was the reported retention rate for Quarry Nine?", "type": "answerable", "gold_chunk_ids": ["14940ebdc9cef033"], "gold_answer": "74 percent"}
+{"id": "a052", "question": "What was the reported open audit findings for Fallow Ridge?", "type": "answerable", "gold_chunk_ids": ["c6d7cce9ad84006e"], "gold_answer": "40 findings"}
+{"id": "a053", "question": "What was the reported retention rate for Alder Grove?", "type": "answerable", "gold_chunk_ids": ["38d6fa5865a193b4"], "gold_answer": "90 percent"}
+{"id": "a054", "question": "What was the reported retention rate for Yew Hollow?", "type": "answerable", "gold_chunk_ids": ["32e92d93b805e2ef"], "gold_answer": "69 percent"}
+{"id": "a055", "question": "What was the reported compliance score for Larkspur Yard?", "type": "answerable", "gold_chunk_ids": ["f95be6d87c91c07f"], "gold_answer": "66 out of 100"}
+{"id": "a056", "question": "What was the reported annual budget for Kestrel Terminal?", "type": "answerable", "gold_chunk_ids": ["2c81a6dd1ab7b740"], "gold_answer": "USD 130 million"}
+{"id": "a057", "question": "What was the reported throughput for Vantage Annex?", "type": "answerable", "gold_chunk_ids": ["f43073d996cade5c"], "gold_answer": "3561 tonnes per day"}
+{"id": "a058", "question": "What was the reported headcount for Gorse Hollow?", "type": "answerable", "gold_chunk_ids": ["9a79824a0478f63b"], "gold_answer": "645 employees"}
+{"id": "a059", "question": "What was the reported median response time for Briar Glen?", "type": "answerable", "gold_chunk_ids": ["205cf54ee56f37f3"], "gold_answer": "405 milliseconds"}
+{"id": "a060", "question": "What was the reported compliance score for Yarrow Campus?", "type": "answerable", "gold_chunk_ids": ["de4508a84f94f8de"], "gold_answer": "82 out of 100"}
+{"id": "a061", "question": "What was the reported retention rate for Ivory Quay?", "type": "answerable", "gold_chunk_ids": ["2bb9e038c9f24c89"], "gold_answer": "75 percent"}
+{"id": "a062", "question": "What was the reported compliance score for Kestrel Terminal?", "type": "answerable", "gold_chunk_ids": ["0dc45ef5cc420921"], "gold_answer": "67 out of 100"}
+{"id": "a063", "question": "What was the reported throughput for Jasper Flats?", "type": "answerable", "gold_chunk_ids": ["6185f970a24265a5"], "gold_answer": "6138 tonnes per day"}
+{"id": "a064", "question": "What was the reported throughput for Pinehurst Site?", "type": "answerable", "gold_chunk_ids": ["24acd0d6747c7a99"], "gold_answer": "8845 tonnes per day"}
+{"id": "a065", "question": "What was the reported annual budget for Kestrel Terminal?", "type": "answerable", "gold_chunk_ids": ["b868a4ee85836f5f"], "gold_answer": "USD 98 million"}
+{"id": "a066", "question": "What was the reported annual budget for Yarrow Campus?", "type": "answerable", "gold_chunk_ids": ["81f66de81e57fb5d"], "gold_answer": "USD 193 million"}
+{"id": "a067", "question": "What was the reported energy consumption for Zenith Bunker?", "type": "answerable", "gold_chunk_ids": ["f391080b17cbdabb"], "gold_answer": "37665 megawatt hours"}
+{"id": "a068", "question": "What was the reported open audit findings for Silverline Hub?", "type": "answerable", "gold_chunk_ids": ["9ca3358730cba250", "f9a37d21e9e21e83"], "gold_answer": "0 findings"}
+{"id": "a069", "question": "What was the reported retention rate for Silverline Hub?", "type": "answerable", "gold_chunk_ids": ["9ca3358730cba250"], "gold_answer": "79 percent"}
+{"id": "a070", "question": "What was the reported throughput for Sorrel Point?", "type": "answerable", "gold_chunk_ids": ["bc13ec13c705a157"], "gold_answer": "5886 tonnes per day"}
+{"id": "a071", "question": "What was the reported headcount for Yew Hollow?", "type": "answerable", "gold_chunk_ids": ["cc7e4d8548eb6bfa"], "gold_answer": "2965 employees"}
+{"id": "a072", "question": "What was the reported headcount for Norvik Plant?", "type": "answerable", "gold_chunk_ids": ["0b649fd4e1540e45"], "gold_answer": "2412 employees"}
+{"id": "a073", "question": "What was the reported energy consumption for Kelvin Yard?", "type": "answerable", "gold_chunk_ids": ["90e96ad6d3bc97b1"], "gold_answer": "38991 megawatt hours"}
+{"id": "a074", "question": "What was the reported throughput for Granite Reach?", "type": "answerable", "gold_chunk_ids": ["31faca34245e4465"], "gold_answer": "7569 tonnes per day"}
+{"id": "a075", "question": "What was the reported compliance score for Osprey Station?", "type": "answerable", "gold_chunk_ids": ["8a878932b3a71f0c"], "gold_answer": "68 out of 100"}
+{"id": "a076", "question": "What was the reported retention rate for Northwind Silo?", "type": "answerable", "gold_chunk_ids": ["e0046062d7c1140b"], "gold_answer": "78 percent"}
+{"id": "a077", "question": "What was the reported median response time for Blackfen Works?", "type": "answerable", "gold_chunk_ids": ["535c05921e9f90e7"], "gold_answer": "792 milliseconds"}
+{"id": "a078", "question": "What was the reported energy consumption for Ashcombe Mill?", "type": "answerable", "gold_chunk_ids": ["16943aad8b74b1df"], "gold_answer": "2680 megawatt hours"}
+{"id": "a079", "question": "What was the reported retention rate for Halden Institute?", "type": "answerable", "gold_chunk_ids": ["b3a73a77285f3e0e"], "gold_answer": "93 percent"}
+{"id": "a080", "question": "What was the reported energy consumption for Ardent Labs?", "type": "answerable", "gold_chunk_ids": ["b226f26384d00186"], "gold_answer": "22054 megawatt hours"}
+{"id": "a081", "question": "What was the reported open audit findings for Briar Glen?", "type": "answerable", "gold_chunk_ids": ["b9b879e499c59b72", "32bbbe5564e5ba57"], "gold_answer": "19 findings"}
+{"id": "a082", "question": "What was the reported median response time for Norvik Plant?", "type": "answerable", "gold_chunk_ids": ["e324082b80f6cbed"], "gold_answer": "756 milliseconds"}
+{"id": "a083", "question": "What was the reported retention rate for Blackfen Works?", "type": "answerable", "gold_chunk_ids": ["0d8a6b66837f1a5c"], "gold_answer": "78 percent"}
+{"id": "a084", "question": "What was the reported throughput for Basalt Complex?", "type": "answerable", "gold_chunk_ids": ["635558237f5025d0"], "gold_answer": "877 tonnes per day"}
+{"id": "a085", "question": "What was the reported median response time for Ardent Labs?", "type": "answerable", "gold_chunk_ids": ["5aa46124a4f07b3f"], "gold_answer": "244 milliseconds"}
+{"id": "a086", "question": "What was the reported throughput for Alder Grove?", "type": "answerable", "gold_chunk_ids": ["0bf2e50d7146a3df"], "gold_answer": "9042 tonnes per day"}
+{"id": "a087", "question": "What was the reported throughput for Xenia Plant?", "type": "answerable", "gold_chunk_ids": ["462f513fcf1fc13d"], "gold_answer": "1149 tonnes per day"}
+{"id": "a088", "question": "What was the reported energy consumption for Verdant Depot?", "type": "answerable", "gold_chunk_ids": ["2c70833f28cb3524"], "gold_answer": "30656 megawatt hours"}
+{"id": "a089", "question": "What was the reported open audit findings for Thornfield Site?", "type": "answerable", "gold_chunk_ids": ["28b959d7dcd92d5b"], "gold_answer": "33 findings"}
+{"id": "a090", "question": "What was the reported energy consumption for Sable Works?", "type": "answerable", "gold_chunk_ids": ["34f39c2267dbd58a"], "gold_answer": "6736 megawatt hours"}
+{"id": "a091", "question": "What was the reported open audit findings for Jasper Flats?", "type": "answerable", "gold_chunk_ids": ["dc39bf25a7c1d126"], "gold_answer": "4 findings"}
+{"id": "a092", "question": "What was the reported throughput for Gorse Hollow?", "type": "answerable", "gold_chunk_ids": ["afb85ee3f0fd5972"], "gold_answer": "6422 tonnes per day"}
+{"id": "a093", "question": "What was the reported energy consumption for Wexford Mill?", "type": "answerable", "gold_chunk_ids": ["b0f9f93a42b34ac2"], "gold_answer": "28285 megawatt hours"}
+{"id": "a094", "question": "What was the reported headcount for Xenia Plant?", "type": "answerable", "gold_chunk_ids": ["2c5ab91167ad5e97"], "gold_answer": "950 employees"}
+{"id": "a095", "question": "What was the reported retention rate for Meridian Depot?", "type": "answerable", "gold_chunk_ids": ["02a1c689ec8137d3"], "gold_answer": "73 percent"}
+{"id": "a096", "question": "What was the reported headcount for Halden Institute?", "type": "answerable", "gold_chunk_ids": ["5b9c458de410a562"], "gold_answer": "1366 employees"}
+{"id": "a097", "question": "What was the reported median response time for Cobalt Ridge?", "type": "answerable", "gold_chunk_ids": ["6f6b471026da6ae6"], "gold_answer": "710 milliseconds"}
+{"id": "a098", "question": "What was the reported throughput for Redwood Vault?", "type": "answerable", "gold_chunk_ids": ["ee316a5ec6b9ad6e"], "gold_answer": "5203 tonnes per day"}
+{"id": "a099", "question": "What was the reported throughput for Kestrel Terminal?", "type": "answerable", "gold_chunk_ids": ["501b029bba0eef40"], "gold_answer": "5794 tonnes per day"}
+{"id": "a100", "question": "What was the reported energy consumption for Granite Reach?", "type": "answerable", "gold_chunk_ids": ["31faca34245e4465"], "gold_answer": "28027 megawatt hours"}
+{"id": "a101", "question": "What was the reported median response time for Willow Reach?", "type": "answerable", "gold_chunk_ids": ["bf818eae29f3765c"], "gold_answer": "236 milliseconds"}
+{"id": "a102", "question": "What was the reported compliance score for Xenia Plant?", "type": "answerable", "gold_chunk_ids": ["462f513fcf1fc13d", "2a789ce518add08d"], "gold_answer": "88 out of 100"}
+{"id": "a103", "question": "What was the reported energy consumption for Alder Grove?", "type": "answerable", "gold_chunk_ids": ["0bf2e50d7146a3df"], "gold_answer": "9721 megawatt hours"}
+{"id": "a104", "question": "What was the reported throughput for Fallow Ridge?", "type": "answerable", "gold_chunk_ids": ["d5a8e4cc63b938a6", "fa29d352e98ef7be"], "gold_answer": "6261 tonnes per day"}
+{"id": "a105", "question": "What was the reported annual budget for Northwind Silo?", "type": "answerable", "gold_chunk_ids": ["919d06ee76c5fa97"], "gold_answer": "USD 225 million"}
+{"id": "a106", "question": "What was the reported energy consumption for Cobalt Ridge?", "type": "answerable", "gold_chunk_ids": ["17a5543103f5379c"], "gold_answer": "6301 megawatt hours"}
+{"id": "a107", "question": "What was the reported headcount for Kestrel Terminal?", "type": "answerable", "gold_chunk_ids": ["2c81a6dd1ab7b740"], "gold_answer": "1038 employees"}
+{"id": "a108", "question": "What was the reported open audit findings for Vantage Annex?", "type": "answerable", "gold_chunk_ids": ["67094aa5a354b507"], "gold_answer": "10 findings"}
+{"id": "a109", "question": "What was the reported headcount for Norvik Plant?", "type": "answerable", "gold_chunk_ids": ["e324082b80f6cbed"], "gold_answer": "2980 employees"}
+{"id": "a110", "question": "What was the reported throughput for Willow Reach?", "type": "answerable", "gold_chunk_ids": ["2ed9daac0ee1bd62"], "gold_answer": "992 tonnes per day"}
+{"id": "a111", "question": "What was the reported headcount for Larkspur Yard?", "type": "answerable", "gold_chunk_ids": ["cb8760345f01dacf"], "gold_answer": "2275 employees"}
+{"id": "a112", "question": "What was the reported median response time for Orchard Line?", "type": "answerable", "gold_chunk_ids": ["a36f3cb280ecd702"], "gold_answer": "170 milliseconds"}
+{"id": "a113", "question": "What was the reported retention rate for Ashcombe Mill?", "type": "answerable", "gold_chunk_ids": ["68e9e8220bd162c6"], "gold_answer": "89 percent"}
+{"id": "a114", "question": "What was the reported annual budget for Verdant Depot?", "type": "answerable", "gold_chunk_ids": ["06e5583e142277b9"], "gold_answer": "USD 220 million"}
+{"id": "a115", "question": "What was the reported annual budget for Osprey Station?", "type": "answerable", "gold_chunk_ids": ["8c490c3f68dc0be1"], "gold_answer": "USD 227 million"}
+{"id": "a116", "question": "What was the reported median response time for Yarrow Campus?", "type": "answerable", "gold_chunk_ids": ["81f66de81e57fb5d", "35aa1307ed1e2bac"], "gold_answer": "734 milliseconds"}
+{"id": "a117", "question": "What was the reported retention rate for Redwood Vault?", "type": "answerable", "gold_chunk_ids": ["68a0b5cd349d469b"], "gold_answer": "71 percent"}
+{"id": "a118", "question": "What was the reported open audit findings for Wexford Mill?", "type": "answerable", "gold_chunk_ids": ["1203066f52ed1b68", "db9e884ca43f0193"], "gold_answer": "12 findings"}
+{"id": "a119", "question": "What was the reported open audit findings for Verdant Depot?", "type": "answerable", "gold_chunk_ids": ["f3f8f2eff707af57"], "gold_answer": "35 findings"}
+{"id": "a120", "question": "What was the reported compliance score for Halden Institute?", "type": "answerable", "gold_chunk_ids": ["4e37c02b4e69a210", "b3a73a77285f3e0e"], "gold_answer": "95 out of 100"}
+{"id": "a121", "question": "What was the reported open audit findings for Gorse Hollow?", "type": "answerable", "gold_chunk_ids": ["5395dab576468a1c"], "gold_answer": "14 findings"}
+{"id": "a122", "question": "What was the reported open audit findings for Kestrel Terminal?", "type": "answerable", "gold_chunk_ids": ["28edb8a6ecad4b24"], "gold_answer": "6 findings"}
+{"id": "a123", "question": "What was the reported throughput for Cedar Wharf?", "type": "answerable", "gold_chunk_ids": ["061a692679797e2b"], "gold_answer": "1532 tonnes per day"}
+{"id": "a124", "question": "What was the reported compliance score for Calder Wharf?", "type": "answerable", "gold_chunk_ids": ["3c02df45747542c4"], "gold_answer": "62 out of 100"}
+{"id": "a125", "question": "What was the reported compliance score for Basalt Complex?", "type": "answerable", "gold_chunk_ids": ["635558237f5025d0", "a74300003551f2e5"], "gold_answer": "92 out of 100"}
+{"id": "a126", "question": "What was the reported retention rate for Dunmore Plant?", "type": "answerable", "gold_chunk_ids": ["443a53261873d0d1"], "gold_answer": "82 percent"}
+{"id": "a127", "question": "What was the reported annual budget for Tamarack Works?", "type": "answerable", "gold_chunk_ids": ["31d680f30e15faf6"], "gold_answer": "USD 178 million"}
+{"id": "a128", "question": "What was the reported median response time for Harrow Field?", "type": "answerable", "gold_chunk_ids": ["33af9191ae156447"], "gold_answer": "101 milliseconds"}
+{"id": "a129", "question": "What was the reported median response time for Nettle Bank?", "type": "answerable", "gold_chunk_ids": ["7a76a9947c02cdef"], "gold_answer": "789 milliseconds"}
+{"id": "a130", "question": "What was the reported throughput for Yew Hollow?", "type": "answerable", "gold_chunk_ids": ["8e682872e1cf8e4f"], "gold_answer": "2305 tonnes per day"}
+{"id": "a131", "question": "What was the reported compliance score for Cobalt Ridge?", "type": "answerable", "gold_chunk_ids": ["a96be1afc1e85657"], "gold_answer": "90 out of 100"}
+{"id": "a132", "question": "What was the reported headcount for Jasper Flats?", "type": "answerable", "gold_chunk_ids": ["5458771fab7540a0"], "gold_answer": "2331 employees"}
+{"id": "a133", "question": "What was the reported energy consumption for Tamarack Works?", "type": "answerable", "gold_chunk_ids": ["e1c23faf879d104d"], "gold_answer": "9153 megawatt hours"}
+{"id": "a134", "question": "What was the reported retention rate for Norvik Plant?", "type": "answerable", "gold_chunk_ids": ["ecfc25f3a944a427"], "gold_answer": "76 percent"}
+{"id": "a135", "question": "What was the reported compliance score for Verdant Depot?", "type": "answerable", "gold_chunk_ids": ["d437ff478a96ed6f"], "gold_answer": "71 out of 100"}
+{"id": "a136", "question": "What was the reported throughput for Nettle Bank?", "type": "answerable", "gold_chunk_ids": ["64b10d843e2bc6df"], "gold_answer": "9310 tonnes per day"}
+{"id": "a137", "question": "What was the reported annual budget for Juniper Facility?", "type": "answerable", "gold_chunk_ids": ["a200c4d05637aa83"], "gold_answer": "USD 182 million"}
+{"id": "a138", "question": "What was the reported annual budget for Sable Works?", "type": "answerable", "gold_chunk_ids": ["97420593da199f28"], "gold_answer": "USD 203 million"}
+{"id": "a139", "question": "What was the reported median response time for Meridian Depot?", "type": "answerable", "gold_chunk_ids": ["65a0c43a07cab402"], "gold_answer": "528 milliseconds"}
+{"id": "a140", "question": "What was the reported annual budget for Dunmore Plant?", "type": "answerable", "gold_chunk_ids": ["501acc246d1030ff"], "gold_answer": "USD 38 million"}
+{"id": "a141", "question": "What was the reported annual budget for Norvik Plant?", "type": "answerable", "gold_chunk_ids": ["0b649fd4e1540e45"], "gold_answer": "USD 166 million"}
+{"id": "a142", "question": "What was the reported compliance score for Sorrel Point?", "type": "answerable", "gold_chunk_ids": ["9b378a64b61f3178"], "gold_answer": "79 out of 100"}
+{"id": "a143", "question": "What was the reported open audit findings for Zephyr Station?", "type": "answerable", "gold_chunk_ids": ["17fb821f4eca2db1"], "gold_answer": "18 findings"}
+{"id": "a144", "question": "What was the reported energy consumption for Norvik Plant?", "type": "answerable", "gold_chunk_ids": ["0774b6aedd4dd726"], "gold_answer": "22694 megawatt hours"}
+{"id": "a145", "question": "What was the reported open audit findings for Juniper Facility?", "type": "answerable", "gold_chunk_ids": ["c7f450a0f42a1a4b", "30f90c9f0c91a7ab"], "gold_answer": "18 findings"}
+{"id": "a146", "question": "What was the reported open audit findings for Norvik Plant?", "type": "answerable", "gold_chunk_ids": ["b8bee25d88d03910"], "gold_answer": "17 findings"}
+{"id": "a147", "question": "What was the reported compliance score for Tamarack Works?", "type": "answerable", "gold_chunk_ids": ["f46960dfea543346"], "gold_answer": "87 out of 100"}
+{"id": "a148", "question": "What was the reported annual budget for Linden Terminal?", "type": "answerable", "gold_chunk_ids": ["57629f93d8e67ad4"], "gold_answer": "USD 64 million"}
+{"id": "a149", "question": "What was the reported annual budget for Cobalt Ridge?", "type": "answerable", "gold_chunk_ids": ["2c20568c829a2f0f"], "gold_answer": "USD 20 million"}
+{"id": "a150", "question": "What was the reported compliance score for Quarry Nine?", "type": "answerable", "gold_chunk_ids": ["14940ebdc9cef033"], "gold_answer": "86 out of 100"}
+{"id": "u001", "question": "What was the reported carbon offset for Halden Institute?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u002", "question": "What was the reported board size for Norvik Plant?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u003", "question": "What was the reported insurance premium for Cobalt Ridge?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u004", "question": "What was the reported patent portfolio for Sable Works?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u005", "question": "What was the reported customer satisfaction index for Meridian Depot?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u006", "question": "What was the reported overtime cost for Ardent Labs?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u007", "question": "What was the reported water usage for Kestrel Terminal?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u008", "question": "What was the reported incident count for Juniper Facility?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u009", "question": "What was the reported carbon offset for Larkspur Yard?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u010", "question": "What was the reported board size for Tamarack Works?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u011", "question": "What was the reported insurance premium for Vantage Annex?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u012", "question": "What was the reported patent portfolio for Osprey Station?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u013", "question": "What was the reported customer satisfaction index for Quarry Nine?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u014", "question": "What was the reported overtime cost for Basalt Complex?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u015", "question": "What was the reported water usage for Northwind Silo?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u016", "question": "What was the reported incident count for Ember Point?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u017", "question": "What was the reported carbon offset for Granite Reach?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u018", "question": "What was the reported board size for Silverline Hub?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u019", "question": "What was the reported insurance premium for Thornfield Site?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u020", "question": "What was the reported patent portfolio for Wexford Mill?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u021", "question": "What was the reported customer satisfaction index for Yarrow Campus?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u022", "question": "What was the reported overtime cost for Zenith Bunker?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u023", "question": "What was the reported water usage for Alder Grove?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u024", "question": "What was the reported incident count for Blackfen Works?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u025", "question": "What was the reported carbon offset for Calder Wharf?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u026", "question": "What was the reported board size for Dunmore Plant?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u027", "question": "What was the reported insurance premium for Elmsworth Depot?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u028", "question": "What was the reported patent portfolio for Fallow Ridge?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u029", "question": "What was the reported customer satisfaction index for Gorse Hollow?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u030", "question": "What was the reported overtime cost for Harrow Field?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u031", "question": "What was the reported water usage for Ivory Quay?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u032", "question": "What was the reported incident count for Jasper Flats?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u033", "question": "What was the reported carbon offset for Kelvin Yard?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u034", "question": "What was the reported board size for Linden Terminal?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u035", "question": "What was the reported insurance premium for Marlowe Works?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u036", "question": "What was the reported patent portfolio for Nettle Bank?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u037", "question": "What was the reported customer satisfaction index for Orchard Line?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u038", "question": "What was the reported overtime cost for Pinehurst Site?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u039", "question": "What was the reported water usage for Redwood Vault?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u040", "question": "What was the reported incident count for Sorrel Point?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u041", "question": "What was the reported carbon offset for Tamarisk Yard?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u042", "question": "What was the reported board size for Umber Works?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u043", "question": "What was the reported insurance premium for Verdant Depot?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u044", "question": "What was the reported patent portfolio for Willow Reach?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u045", "question": "What was the reported customer satisfaction index for Xenia Plant?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u046", "question": "What was the reported overtime cost for Yew Hollow?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u047", "question": "What was the reported water usage for Zephyr Station?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u048", "question": "What was the reported incident count for Ashcombe Mill?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u049", "question": "What was the reported carbon offset for Briar Glen?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "u050", "question": "What was the reported board size for Cedar Wharf?", "type": "unanswerable", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o001", "question": "What is the best way to bake sourdough bread at home?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o002", "question": "Who won the 2018 FIFA World Cup final?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o003", "question": "How do I change a flat tyre on a motorcycle?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o004", "question": "What are the symptoms of seasonal influenza?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o005", "question": "Which planet has the largest ring system?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o006", "question": "How long should I boil an egg for a soft yolk?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o007", "question": "What is the capital city of Australia?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o008", "question": "How do I prune a fig tree in early spring?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o009", "question": "What causes the northern lights?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o010", "question": "Recommend a beginner routine for learning guitar.", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o011", "question": "How much water should an adult drink per day?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o012", "question": "What is the plot of Hamlet in one sentence?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o013", "question": "How do I fix a leaking kitchen tap?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o014", "question": "Which programming language is best for mobile games?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o015", "question": "What is the fastest land animal?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o016", "question": "How do vaccines work in the human body?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o017", "question": "What time zone is Tokyo in?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o018", "question": "How do I remove red wine from a carpet?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o019", "question": "What is the tallest mountain in South America?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o020", "question": "How many players are on a basketball team?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o021", "question": "What is the difference between a stock and a bond?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o022", "question": "How do I train a puppy to sit?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o023", "question": "What is photosynthesis in simple terms?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o024", "question": "Which country produces the most coffee?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}
+{"id": "o025", "question": "How do I get rid of fruit flies in my kitchen?", "type": "out_of_domain", "gold_chunk_ids": [], "gold_answer": ""}

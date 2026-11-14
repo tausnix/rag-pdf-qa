@@ -1,0 +1,24 @@
+# ---- core pipeline ----
+pypdf>=4.2                 # PDF text extraction (PyPDFLoader backend)
+rank-bm25>=0.2.2           # lexical retriever
+chromadb>=0.5,<2           # persistent vector store
+numpy>=1.26
+python-dotenv>=1.0
+
+# ---- embeddings ----
+# Preferred (matches the resume): real all-MiniLM-L6-v2 via sentence-transformers.
+# Heavy (~2 GB with torch). If you skip it, the pipeline falls back to the ONNX
+# build of the *same* model that ships with chromadb, then to a hash embedder.
+sentence-transformers>=3.0 ; extra == "st"
+
+# ---- generation ----
+requests>=2.31             # raw Gemini REST fallback (no SDK required)
+# google-genai>=1.0        # optional: preferred SDK path if installed
+# google-generativeai>=0.8 # optional: legacy SDK, also supported
+
+# ---- benchmark construction ----
+datasets>=2.20             # SQuAD 2.0 loader  (only needed to rebuild the benchmark)
+reportlab>=4.2             # writes the corpus PDF (only needed to rebuild the corpus)
+
+# ---- demo app ----
+streamlit>=1.36
