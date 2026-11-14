@@ -3,7 +3,11 @@
 A bi-encoder (MiniLM) embeds the query and each chunk *independently*, so it can
 only compare two summaries. A cross-encoder reads ``(query, chunk)`` together and
 scores relevance directly -- much more accurate, far too slow to run over a whole
-corpus. So: retrieve 15 candidates cheaply, then rerank those 15.
+corpus. So: retrieve a handful of candidates cheaply, then rerank those.
+
+Pair encoding is *dynamic*: each batch is padded to the longest ``(query, chunk)``
+pair it actually contains (never a fixed width), and truncated at 256 tokens.
+That keeps interactive reranks cheap on CPU -- padding is computed work.
 
 Model: ``Xenova/ms-marco-MiniLM-L-6-v2`` (int8 ONNX, ~22 MB) -- the same
 ms-marco MiniLM cross-encoder, exported for transformers.js.
@@ -21,6 +25,10 @@ from .retrieve import Hit
 _MODEL_FILES = ("tokenizer.json", "onnx/model_quantized.onnx")
 _FALLBACK_FILES = ("tokenizer.json", "onnx/model.onnx")
 
+# Hard cap on a (query, chunk) pair. Longer inputs are truncated; shorter ones are
+# padded only to the longest pair in the batch, so short chunks cost less.
+MAX_PAIR_TOKENS = 256
+
 
 class CrossEncoderReranker:
     """Scores query/passage pairs with a 6-layer MiniLM cross-encoder."""
@@ -29,15 +37,21 @@ class CrossEncoderReranker:
         self,
         model_dir: Path | None = None,
         max_length: int | None = None,
+        top_n: int | None = None,
         threads: int | None = None,
     ) -> None:
         self.model_dir = Path(model_dir) if model_dir else _ensure_model()
-        self.max_length = max_length or settings.rerank_max_length
+        # Never exceed the hard cap, even if the environment asks for more.
+        self.max_length = min(max_length or settings.rerank_max_length, MAX_PAIR_TOKENS)
+        self.top_n = top_n or settings.rerank_top_n
         self._threads = threads or int(
             os.getenv("ONNX_THREADS", max(1, (os.cpu_count() or 4) // 2))
         )
         self._session = None
         self._tokenizer = None
+        # Exposed for the UI trace: what the last batch actually cost.
+        self.last_batch = 0
+        self.last_seq_len = 0
 
     # ------------------------------------------------------------------ load
     def _load(self) -> None:
@@ -49,6 +63,8 @@ class CrossEncoderReranker:
 
         self._tokenizer = Tokenizer.from_file(str(self.model_dir / "tokenizer.json"))
         self._tokenizer.enable_truncation(max_length=self.max_length)
+        # No `length=`: pad to the longest pair in *this* batch. A fixed 512-width
+        # tensor would do ~2-3x the work for 160-token pairs.
         self._tokenizer.enable_padding()
 
         opts = ort.SessionOptions()
@@ -68,6 +84,8 @@ class CrossEncoderReranker:
         self._load()
 
         encoded = self._tokenizer.encode_batch([(query, p) for p in passages])
+        self.last_batch = len(encoded)
+        self.last_seq_len = max(len(e.ids) for e in encoded)
         feed = {
             "input_ids": np.asarray([e.ids for e in encoded], dtype=np.int64),
             "attention_mask": np.asarray([e.attention_mask for e in encoded], dtype=np.int64),
@@ -85,7 +103,7 @@ class CrossEncoderReranker:
             hits,
             k=k,
             scorer=self.score,
-            top_n=top_n if top_n is not None else settings.rerank_top_n,
+            top_n=top_n if top_n is not None else self.top_n,
         )
 
 
@@ -109,6 +127,9 @@ def rerank_hits(
 
     for hit, score in zip(candidates, scores):
         hit.rerank_score = float(score)
+        # ms-marco heads emit a single logit; sigmoid turns it into a 0-1 relevance
+        # probability for display. Ranking uses the raw logit (monotonic).
+        hit.rerank_prob = float(1.0 / (1.0 + np.exp(-float(score))))
 
     ranked = sorted(candidates, key=lambda h: h.rerank_score, reverse=True)[:k]
     return ranked

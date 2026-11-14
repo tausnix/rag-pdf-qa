@@ -64,3 +64,33 @@ def test_scorer_length_mismatch_is_an_error():
 def test_score_with_no_passages_returns_empty_without_loading_model():
     reranker = CrossEncoderReranker.__new__(CrossEncoderReranker)  # bypass __init__/download
     assert reranker.score("q", []).shape == (0,)
+
+
+def test_rerank_sets_sigmoid_probability():
+    hits = [_hit("a"), _hit("b"), _hit("c")]
+    scores = {"a": 0.0, "b": 2.0, "c": -2.0}
+    ranked = rerank_hits(
+        "q", hits, k=3, scorer=lambda q, texts: [scores[h.chunk_id] for h in hits]
+    )
+    probs = {h.chunk_id: h.rerank_prob for h in ranked}
+    assert probs["a"] == pytest.approx(0.5, abs=1e-6)
+    assert probs["b"] > probs["a"] > probs["c"]
+    assert all(0.0 < p < 1.0 for p in probs.values())
+
+
+def test_instance_defaults_cap_length_and_use_configured_top_n(tmp_path):
+    reranker = CrossEncoderReranker(model_dir=tmp_path, max_length=512, top_n=7)
+    assert reranker.max_length == 256  # never above the hard cap
+    assert reranker.top_n == 7
+
+    seen = {}
+
+    def scorer(q, texts):
+        seen["n"] = len(texts)
+        return np.zeros(len(texts), dtype=np.float32)
+
+    hits = [_hit(str(i)) for i in range(12)]
+    reranker.score = scorer  # injected scorer, no model load
+    ranked = reranker.rerank("q", hits, k=3)
+    assert seen["n"] == 7
+    assert len(ranked) == 3

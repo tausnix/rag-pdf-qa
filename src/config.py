@@ -49,7 +49,7 @@ class Settings:
     # --- reranking (cross-encoder) ---
     rerank_model: str = os.getenv("RERANK_MODEL", "Xenova/ms-marco-MiniLM-L-6-v2")
     rerank_top_n: int = _int("RERANK_TOP_N", 15)       # candidates scored by the cross-encoder
-    rerank_max_length: int = _int("RERANK_MAX_LENGTH", 384)
+    rerank_max_length: int = _int("RERANK_MAX_LENGTH", 256)
 
     # --- generation ---
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")

@@ -28,17 +28,17 @@
     "hit_rate@3": 0.9266666666666666,
     "mrr@10": 0.7512962962962962,
     "answer_in_context@5": 0.9866666666666667,
-    "latency_p50_ms": 11.19360001757741,
-    "latency_p95_ms": 14.1478999867104,
-    "latency_mean_ms": 11.597586668665624,
-    "retrieval_p50_ms": 11.19360001757741,
+    "latency_p50_ms": 10.217800037935376,
+    "latency_p95_ms": 10.909700009506196,
+    "latency_mean_ms": 9.574910667724907,
+    "retrieval_p50_ms": 10.217800037935376,
     "rerank_p50_ms": 0.0,
     "abstention_accuracy": 1.0,
     "negatives_refused": 75,
     "negatives_answered": 0,
     "false_refusal_rate": 0.013333333333333334,
     "faithfulness": 1.0,
-    "generation_p50_ms": 0.4605999565683305,
+    "generation_p50_ms": 0.36179996095597744,
     "tokens_per_query": {
       "input": 995.7022222222222,
       "output": 24.36888888888889
@@ -56,17 +56,17 @@
     "hit_rate@3": 0.9266666666666666,
     "mrr@10": 0.7448412698412699,
     "answer_in_context@5": 0.9933333333333333,
-    "latency_p50_ms": 11.892199981957674,
-    "latency_p95_ms": 14.971200027503073,
-    "latency_mean_ms": 11.72725866548717,
-    "retrieval_p50_ms": 11.892199981957674,
+    "latency_p50_ms": 10.950799973215908,
+    "latency_p95_ms": 11.922099976800382,
+    "latency_mean_ms": 10.261441336220336,
+    "retrieval_p50_ms": 10.950799973215908,
     "rerank_p50_ms": 0.0,
     "abstention_accuracy": 1.0,
     "negatives_refused": 75,
     "negatives_answered": 0,
     "false_refusal_rate": 0.0,
     "faithfulness": 1.0,
-    "generation_p50_ms": 0.3968999953940511,
+    "generation_p50_ms": 0.354300020262599,
     "tokens_per_query": {
       "input": 999.2133333333334,
       "output": 24.57777777777778
@@ -84,17 +84,17 @@
     "hit_rate@3": 1.0,
     "mrr@10": 0.8833333333333333,
     "answer_in_context@5": 1.0,
-    "latency_p50_ms": 1084.5668999827467,
-    "latency_p95_ms": 1386.983800039161,
-    "latency_mean_ms": 1056.411156001656,
-    "retrieval_p50_ms": 12.28560000890866,
-    "rerank_p50_ms": 1072.573299985379,
+    "latency_p50_ms": 1125.3029000363313,
+    "latency_p95_ms": 1352.960099990014,
+    "latency_mean_ms": 1093.4705831102717,
+    "retrieval_p50_ms": 12.074199970811605,
+    "rerank_p50_ms": 1113.086499972269,
     "abstention_accuracy": 1.0,
     "negatives_refused": 75,
     "negatives_answered": 0,
     "false_refusal_rate": 0.0,
     "faithfulness": 1.0,
-    "generation_p50_ms": 0.4304000176489353,
+    "generation_p50_ms": 0.4371999530121684,
     "tokens_per_query": {
       "input": 1015.1022222222222,
       "output": 24.573333333333334
@@ -106,6 +106,6 @@
   "delta_rerank_vs_hybrid": {
     "hit_rate@3": 0.07333333333333336,
     "mrr@10": 0.13849206349206344,
-    "latency_ms": 1072.674700000789
+    "latency_ms": 1114.3521000631154
   }
 }

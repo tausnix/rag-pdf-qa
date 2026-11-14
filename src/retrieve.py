@@ -50,6 +50,9 @@ class Hit:
     rank_vector: int | None = None
     rank_bm25: int | None = None
     rerank_score: float | None = None
+    rerank_prob: float | None = None
+    vector_score: float | None = None
+    bm25_score: float | None = None
 
 
 @dataclass
@@ -127,13 +130,15 @@ class Retriever:
             res["ids"][0], res["documents"][0], res["metadatas"][0], res["distances"][0]
         ):
             # Chroma returns L2 distance; convert to a similarity for readability.
+            similarity = 1.0 / (1.0 + float(dist))
             hits.append(
                 Hit(
                     chunk_id=cid,
                     text=doc,
                     page=int(meta["page"]),
                     source=str(meta["source"]),
-                    score=1.0 / (1.0 + float(dist)),
+                    score=similarity,
+                    vector_score=similarity,
                 )
             )
         return hits
@@ -155,6 +160,7 @@ class Retriever:
                     page=int(meta.get("page", 0)),
                     source=str(meta.get("source", "")),
                     score=float(scores[i]),
+                    bm25_score=float(scores[i]),
                 )
             )
         return hits
@@ -169,6 +175,13 @@ class Retriever:
         for hit in lex:
             by_id.setdefault(hit.chunk_id, hit)
 
+        # Keep the component scores for the UI trace. ``score`` is overwritten by
+        # the fused RRF value below, so copy them out first.
+        vector_scores = {h.chunk_id: h.score for h in vec}
+        bm25_scores = {h.chunk_id: h.score for h in lex}
+        rank_vector = {h.chunk_id: i for i, h in enumerate(vec, start=1)}
+        rank_bm25 = {h.chunk_id: i for i, h in enumerate(lex, start=1)}
+
         fused = fuse_rrf(
             [[h.chunk_id for h in vec], [h.chunk_id for h in lex]],
             k=k,
@@ -179,12 +192,10 @@ class Retriever:
         for cid, score in fused:
             hit = by_id[cid]
             hit.score = score
-            hit.rank_vector = next(
-                (i for i, h in enumerate(vec, start=1) if h.chunk_id == cid), None
-            )
-            hit.rank_bm25 = next(
-                (i for i, h in enumerate(lex, start=1) if h.chunk_id == cid), None
-            )
+            hit.vector_score = vector_scores.get(cid)
+            hit.bm25_score = bm25_scores.get(cid)
+            hit.rank_vector = rank_vector.get(cid)
+            hit.rank_bm25 = rank_bm25.get(cid)
             ranked.append(hit)
         return ranked
 

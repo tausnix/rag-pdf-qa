@@ -9,23 +9,23 @@
 
 | Retriever | Hit@3 | MRR@10 | Ans-in-Context@5 | Abstention | Faithfulness | p50 | p95 |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| MiniLM dense | 92.7% | 75.1% | 98.7% | 100.0% | 100.0% | 11.2 ms | 14.1 ms |
-| Hybrid MiniLM + BM25 (RRF) | 92.7% | 74.5% | 99.3% | 100.0% | 100.0% | 11.9 ms | 15.0 ms |
-| Hybrid + cross-encoder rerank (top 15) | 100.0% | 88.3% | 100.0% | 100.0% | 100.0% | 1084.6 ms | 1387.0 ms |
+| MiniLM dense | 92.7% | 75.1% | 98.7% | 100.0% | 100.0% | 10.2 ms | 10.9 ms |
+| Hybrid MiniLM + BM25 (RRF) | 92.7% | 74.5% | 99.3% | 100.0% | 100.0% | 11.0 ms | 11.9 ms |
+| Hybrid + cross-encoder rerank (top 15) | 100.0% | 88.3% | 100.0% | 100.0% | 100.0% | 1125.3 ms | 1353.0 ms |
 
 ## Latency breakdown
 
 | Retriever | retrieval p50 | rerank p50 | total p50 | p95 |
 |---|---:|---:|---:|---:|
-| MiniLM dense | 11.2 ms | 0.0 ms | 11.2 ms | 14.1 ms |
-| Hybrid RRF | 11.9 ms | 0.0 ms | 11.9 ms | 15.0 ms |
-| Hybrid + rerank | 12.3 ms | 1072.6 ms | 1084.6 ms | 1387.0 ms |
+| MiniLM dense | 10.2 ms | 0.0 ms | 10.2 ms | 10.9 ms |
+| Hybrid RRF | 11.0 ms | 0.0 ms | 11.0 ms | 11.9 ms |
+| Hybrid + rerank | 12.1 ms | 1113.1 ms | 1125.3 ms | 1353.0 ms |
 
 ## Rerank lift over RRF
 
 - Hit@3: +7.3 pts
 - MRR@10: +13.8 pts
-- Added latency: 1072.6 ms per query
+- Added latency: 1113.1 ms per query
 
 ## Generation cost
 
