@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parent
 
 def step(label: str, args: list[str]) -> None:
     print(f"\n=== {label} ===\n$ python {' '.join(args)}")
+    sys.stdout.flush()  # keep CI logs in order (child output is unbuffered)
     result = subprocess.run([sys.executable, *args], cwd=ROOT)
     if result.returncode != 0:
         raise SystemExit(f"Step failed: {label}")

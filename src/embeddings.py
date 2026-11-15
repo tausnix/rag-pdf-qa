@@ -137,9 +137,21 @@ def _find_onnx_dir() -> Path:
             return candidate
 
     # First run: let chromadb fetch and cache the weights, then reuse the folder.
+    # NOTE: the ONNXMiniLM_L6_V2 constructor is lazy -- it only imports onnxruntime,
+    # so the actual download happens in _download_model_if_not_exists(). Constructing
+    # the object alone would silently do nothing on a clean machine (e.g. CI).
     from chromadb.utils import embedding_functions
 
-    embedding_functions.ONNXMiniLM_L6_V2()
+    embedder = embedding_functions.ONNXMiniLM_L6_V2()
+    try:
+        embedder._download_model_if_not_exists()
+    except Exception as exc:  # noqa: BLE001 - network/SHA failures all land here
+        raise SystemExit(
+            "Could not download the MiniLM ONNX model "
+            f"({type(exc).__name__}: {exc}). Set ONNX_MODEL_DIR to a folder "
+            "containing model.onnx and tokenizer.json, or run with EMBED_BACKEND=hash."
+        ) from exc
+
     for candidate in candidates:
         if (candidate / "model.onnx").exists():
             return candidate
