@@ -238,3 +238,174 @@ def test_no_cache_lookup_without_an_api_key(tmp_path, monkeypatch):
     assert result["used_llm"] is False
     assert result["cached"] is False
     assert "extractive fallback" in result["answer"]
+
+
+# --------------------------------------------------------------------------- #
+# Retired model ids: gemini-2.0-flash was shut down on 2026-06-01
+# --------------------------------------------------------------------------- #
+def _retired_response():
+    return _FakeResponse(404, body={"error": {
+        "code": 404,
+        "status": "NOT_FOUND",
+        "message": "models/gemini-2.0-flash is not found for API version v1beta, "
+                   "or is not supported for generateContent.",
+    }})
+
+
+def test_model_candidates_are_ordered_and_deduplicated():
+    two = replace(settings, gemini_model="primary", gemini_model_fallbacks=("backup", "primary"))
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(generate, "settings", two)
+        assert generate.model_candidates() == ["primary", "backup"]
+
+
+def test_retired_model_falls_through_to_the_next_candidate(tmp_path, monkeypatch):
+    _cache_env(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        generate,
+        "settings",
+        replace(
+            settings,
+            gemini_api_key="test-key",
+            gemini_model="gemini-2.0-flash",
+            gemini_model_fallbacks=("gemini-flash-latest",),
+        ),
+    )
+    generate.set_min_interval(0.0)
+    monkeypatch.setattr(generate.time, "sleep", lambda s: None)
+    monkeypatch.setattr(generate, "_WORKING_MODEL", None)
+    monkeypatch.setattr(generate, "_LAST_ERROR", None)
+
+    responses = [
+        _retired_response(),
+        _FakeResponse(200, body={
+            "candidates": [{"content": {"parts": [{"text": "44 employees [p.6]"}]}}],
+            "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5},
+        }),
+    ]
+    _fake_post(monkeypatch, responses, [])
+    try:
+        out = generate._gemini_rest("prompt", retries=0)
+        assert out is not None
+        assert out["text"] == "44 employees [p.6]"
+        assert out["model"] == "gemini-flash-latest"
+        assert generate.working_model() == "gemini-flash-latest"
+        assert generate.last_error() is None
+    finally:
+        generate.set_min_interval(None)
+        monkeypatch.setattr(generate, "_WORKING_MODEL", None)
+
+
+def test_every_retired_model_reports_the_reason(tmp_path, monkeypatch):
+    _cache_env(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        generate,
+        "settings",
+        replace(
+            settings,
+            gemini_api_key="test-key",
+            gemini_model="gemini-2.0-flash",
+            gemini_model_fallbacks=("gemini-9.9-flash",),
+        ),
+    )
+    generate.set_min_interval(0.0)
+    monkeypatch.setattr(generate, "_LAST_ERROR", None)
+
+    _fake_post(monkeypatch, [_retired_response(), _retired_response()], [])
+    try:
+        assert generate._gemini_rest("prompt", retries=0) is None
+        assert "404" in generate.last_error()
+        assert "not found" in generate.last_error().lower()
+    finally:
+        generate.set_min_interval(None)
+
+
+def test_answer_explains_a_failed_call_instead_of_asking_for_a_key(tmp_path, monkeypatch):
+    """A configured-but-broken model must not tell the user to add a key."""
+    _cache_env(tmp_path, monkeypatch)
+    hits = [_hit("For Norvik Plant, the reported headcount was 2980 employees.")]
+    monkeypatch.setattr(
+        generate,
+        "settings",
+        replace(
+            settings,
+            gemini_api_key="test-key",
+            gemini_model="gemini-2.0-flash",
+            gemini_model_fallbacks=(),
+        ),
+    )
+    generate.set_min_interval(0.0)
+    monkeypatch.setattr(generate, "_LAST_ERROR", None)
+    monkeypatch.setattr("requests.post", lambda *a, **k: _retired_response())
+    monkeypatch.setattr(generate, "_gemini_sdk", lambda prompt: None)
+
+    try:
+        result = answer("What was the reported headcount for Norvik Plant?", hits, use_llm=True)
+        assert result["used_llm"] is False
+        assert "extractive fallback - Gemini call failed" in result["answer"]
+        assert "set GEMINI_API_KEY" not in result["answer"]
+        assert "404" in result["llm_error"]
+    finally:
+        generate.set_min_interval(None)
+
+
+def test_bad_key_fails_fast_without_retrying_or_rotating(tmp_path, monkeypatch):
+    """401/403 means the key is wrong: no retry loop, no model rotation."""
+    _cache_env(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        generate,
+        "settings",
+        replace(
+            settings,
+            gemini_api_key="wrong-key",
+            gemini_model="primary",
+            gemini_model_fallbacks=("backup",),
+        ),
+    )
+    generate.set_min_interval(0.0)
+    monkeypatch.setattr(generate, "_LAST_ERROR", None)
+
+    calls: list = []
+    _fake_post(monkeypatch, [_FakeResponse(403, body={"error": {
+        "code": 403, "message": "Permission denied on the service."}}) for _ in range(6)], calls)
+    try:
+        assert generate._gemini_rest("prompt", retries=5) is None
+        assert len(calls) == 1  # exactly one attempt, no rotation
+        assert "403" in generate.last_error()
+        assert "Permission denied" in generate.last_error()
+    finally:
+        generate.set_min_interval(None)
+
+
+def test_thinking_switch_is_retried_without_it(tmp_path, monkeypatch):
+    """3.x models may reject thinkingConfig; the call must still succeed."""
+    _cache_env(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        generate,
+        "settings",
+        replace(settings, gemini_api_key="test-key", gemini_model_fallbacks=(), gemini_thinking_budget=0),
+    )
+    generate.set_min_interval(0.0)
+    monkeypatch.setattr(generate.time, "sleep", lambda s: None)
+    monkeypatch.setattr(generate, "_WORKING_MODEL", None)
+
+    seen: list[dict] = []
+
+    def post(*args, **kwargs):
+        seen.append(json.loads(json.dumps(kwargs.get("json"))))  # snapshot: payload mutates
+        if len(seen) == 1:
+            return _FakeResponse(400, body={"error": {
+                "code": 400, "message": "Thinking is not supported for this model."}})
+        return _FakeResponse(200, body={
+            "candidates": [{"content": {"parts": [{"text": "ok [p.1]"}]}}],
+            "usageMetadata": {"promptTokenCount": 3, "candidatesTokenCount": 2},
+        })
+
+    monkeypatch.setattr("requests.post", post)
+    try:
+        out = generate._gemini_rest("prompt", retries=0)
+        assert out is not None and out["text"] == "ok [p.1]"
+        assert "thinkingConfig" in seen[0]["generationConfig"]
+        assert "thinkingConfig" not in seen[1]["generationConfig"]
+    finally:
+        generate.set_min_interval(None)

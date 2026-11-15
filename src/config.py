@@ -52,9 +52,23 @@ class Settings:
     rerank_max_length: int = _int("RERANK_MAX_LENGTH", 256)
 
     # --- generation ---
-    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    # ``gemini-flash-latest`` is Google's moving alias for the current Flash
+    # model, so the default does not rot when a dated id is retired (2.0 Flash
+    # was shut down on 2026-06-01 and every call to it now returns 404).
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+    # Tried in order when the primary id is gone (404 NOT_FOUND) or unsupported.
+    gemini_model_fallbacks: tuple[str, ...] = tuple(
+        m.strip()
+        for m in os.getenv(
+            "GEMINI_MODEL_FALLBACKS", "gemini-3.6-flash,gemini-2.5-flash"
+        ).split(",")
+        if m.strip()
+    )
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     temperature: float = _float("TEMPERATURE", 0.0)
+    # 3.x Flash models think before answering; 0 disables it so the token budget
+    # is spent on the answer. Dropped automatically if the model rejects it.
+    gemini_thinking_budget: int = _int("GEMINI_THINKING_BUDGET", 0)
 
     # --- Gemini free-tier pacing + response cache ---
     # Free tier enforces RPM across Flash models; ~4 s between calls keeps a long
@@ -69,9 +83,11 @@ class Settings:
         os.getenv("GEMINI_CACHE_DIR") or (Path.home() / ".cache" / "rag-pdf-qa" / "gemini")
     )
 
-    # --- cost model (USD per 1M tokens, Gemini 2.0 Flash list price) ---
-    price_input_per_mtok: float = _float("PRICE_INPUT_PER_MTOK", 0.10)
-    price_output_per_mtok: float = _float("PRICE_OUTPUT_PER_MTOK", 0.40)
+    # --- cost model (USD per 1M tokens, Gemini 3.8 Flash promo price) ---
+    # gemini-flash-latest resolves to 3.8 Flash: 0.75 / 3.75 promo through
+    # 2026-12-31, then 1.50 / 7.50. Cost is projected from real usage metadata.
+    price_input_per_mtok: float = _float("PRICE_INPUT_PER_MTOK", 0.75)
+    price_output_per_mtok: float = _float("PRICE_OUTPUT_PER_MTOK", 3.75)
 
     # --- faithfulness ---
     faithfulness_min_overlap: float = _float("FAITHFULNESS_MIN_OVERLAP", 0.6)

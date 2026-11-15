@@ -161,15 +161,16 @@ python run_pipeline.py --rerank        # restores the demo corpus
 ### Generation cost
 
 Tracked per query from actual API usage when a key is present, and projected from the same
-prompt at list price when it is not (`$0.10/M input`, `$0.40/M output`, configurable via
+prompt at list price when it is not (`$0.75/M input`, `$3.75/M output` — the Gemini 3.8 Flash
+promo rate that `gemini-flash-latest` resolves to, configurable via
 `PRICE_INPUT_PER_MTOK` / `PRICE_OUTPUT_PER_MTOK`):
 
 | Corpus | Tokens/query (in/out) | Cost per 1,000 queries | Basis |
 |---|---:|---:|---|
-| SQuAD 2.0 | 916 / 22 | **$0.10** | projected from list price (no API call) |
-| Synthetic handbook | 1015 / 25 | **$0.11** | projected from list price (no API call) |
+| SQuAD 2.0 | 916 / 22 | **$0.77** | projected from list price (no API call) |
+| Synthetic handbook | 1015 / 25 | **$0.86** | projected from list price (no API call) |
 
-So a 100k-query month costs roughly **$10-11 in tokens** — generation is not the expensive
+So a 100k-query month costs roughly **$77-86 in tokens** — generation is not the expensive
 part here. The 1.1-1.3 s reranker on this 2-core CPU is, which is why latency and cost are
 reported separately instead of blended into one "cheap and fast" claim.
 
@@ -399,14 +400,16 @@ Every knob is an environment variable (see `src/config.py`).
 | `RERANK_MAX_LENGTH` | `256` | hard cap per `(query, chunk)` pair; batches pad only to the longest pair |
 | `RERANK_MODEL_DIR` | `~/.cache/rag-pdf-qa/...` | override the downloaded model folder |
 | `GEMINI_API_KEY` | — | enables LLM answers + LLM-scored abstention |
-| `GEMINI_MODEL` | `gemini-2.0-flash` | generator model |
+| `GEMINI_MODEL` | `gemini-flash-latest` | generator model; Google's moving Flash alias, so a dated id retiring does not break the app |
+| `GEMINI_MODEL_FALLBACKS` | `gemini-3.6-flash,gemini-2.5-flash` | tried in order when the primary id returns 404/unsupported |
+| `GEMINI_THINKING_BUDGET` | `0` | disables thinking on 3.x Flash; dropped automatically if the model rejects it |
 | `GEMINI_MIN_INTERVAL_S` | `4` | minimum seconds between Gemini calls (free tier ≈ 15 RPM) |
 | `GEMINI_MAX_RETRIES` | `5` | retries after a 429/5xx before falling back to extractive |
 | `GEMINI_BACKOFF_BASE_S` | `4` | exponential backoff base when no `RetryInfo`/`Retry-After` is sent |
 | `GEMINI_CACHE` | `1` | cache successful responses on disk (`--no-llm-cache` disables) |
 | `GEMINI_CACHE_DIR` | `~/.cache/rag-pdf-qa/gemini` | response-cache folder |
-| `PRICE_INPUT_PER_MTOK` | `0.10` | USD per 1M input tokens (list price) |
-| `PRICE_OUTPUT_PER_MTOK` | `0.40` | USD per 1M output tokens (list price) |
+| `PRICE_INPUT_PER_MTOK` | `0.75` | USD per 1M input tokens (Gemini 3.8 Flash promo) |
+| `PRICE_OUTPUT_PER_MTOK` | `3.75` | USD per 1M output tokens (Gemini 3.8 Flash promo) |
 | `FAITHFULNESS_MIN_OVERLAP` | `0.6` | content-word coverage for a sentence to count as supported |
 | `ONNX_THREADS` | half the cores | onnxruntime intra-op threads |
 

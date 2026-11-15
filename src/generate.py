@@ -23,6 +23,9 @@ from .config import REFUSAL, settings
 from .retrieve import Hit
 
 MAX_CONTEXT_CHARS = 6000
+# 3.x Flash models think before answering and thought tokens share this budget,
+# so leave room for both the reasoning and the 1-3 sentence answer.
+MAX_OUTPUT_TOKENS = 1024
 
 # Bump when the cache payload changes, so stale entries are never reused.
 CACHE_VERSION = 1
@@ -36,6 +39,64 @@ Rules:
 3. Be concise (1-3 sentences). Quote exact figures, names and units.
 4. Cite the page numbers you used in the form [p.N] at the end of the answer.
 """.format(refusal=REFUSAL)
+
+
+# --------------------------------------------------------------------------- #
+# Model resolution
+# --------------------------------------------------------------------------- #
+# Google retires dated model ids (gemini-2.0-flash was shut down 2026-06-01),
+# and every call to a retired id is a 404 that looks like a typo. Track the id
+# that actually answered, plus the last failure, so the app can tell the user
+# the truth instead of silently serving an extractive answer.
+_WORKING_MODEL: str | None = None
+_LAST_ERROR: str | None = None
+
+
+def model_candidates() -> list[str]:
+    """Configured model first, then the fallbacks, de-duplicated."""
+    seen: list[str] = []
+    for name in (settings.gemini_model, *settings.gemini_model_fallbacks):
+        if name and name not in seen:
+            seen.append(name)
+    return seen
+
+
+def working_model() -> str:
+    """The model that last answered, else the configured one."""
+    return _WORKING_MODEL or settings.gemini_model
+
+
+def last_error() -> str | None:
+    """Human-readable reason the last Gemini attempt failed, if it did."""
+    return _LAST_ERROR
+
+
+def _remember_error(status: int | None, message: str) -> None:
+    global _LAST_ERROR
+    detail = " ".join(str(message).split())
+    if len(detail) > 160:
+        detail = detail[:157] + "..."
+    _LAST_ERROR = f"{status}: {detail}" if status else detail
+
+
+def _accept(model: str, text: str) -> str:
+    """Record that ``model`` answered, and clear the failure note."""
+    global _WORKING_MODEL, _LAST_ERROR
+    _WORKING_MODEL, _LAST_ERROR = model, None
+    return text
+
+
+def _is_model_error(status: int, body: str) -> bool:
+    """True when the model id itself is the problem, so trying the next helps."""
+    text = body.lower()
+    if status == 404:
+        return True
+    return status == 400 and (
+        "no longer available" in text
+        or "not supported for generatecontent" in text
+        or "is not found" in text
+    )
+
 
 
 def format_context(hits: list[Hit]) -> str:
@@ -134,7 +195,7 @@ def cache_load(key: str) -> dict | None:
     return {"text": data["text"], "usage": data.get("usage") or {}}
 
 
-def cache_store(key: str, prompt: str, result: dict) -> None:
+def cache_store(key: str, prompt: str, result: dict, model: str | None = None) -> None:
     """Persist one successful response atomically (Ctrl-C safe)."""
     if not cache_enabled():
         return
@@ -142,7 +203,7 @@ def cache_store(key: str, prompt: str, result: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "version": CACHE_VERSION,
-        "model": settings.gemini_model,
+        "model": model or settings.gemini_model,
         "temperature": settings.temperature,
         "prompt_sha256": key,
         "prompt_chars": len(prompt),
@@ -206,97 +267,164 @@ def retry_delay_seconds(response, attempt: int) -> float:
 # Gemini
 # --------------------------------------------------------------------------- #
 def _gemini_sdk(prompt: str) -> str | None:
-    """Try google-genai (new) then google-generativeai (legacy)."""
+    """Try google-genai (new) then google-generativeai (legacy), across models."""
     if not settings.gemini_api_key:
         return None
 
+    for model in model_candidates():
+        try:
+            from google import genai  # type: ignore
+        except ImportError:
+            genai = None  # type: ignore[assignment]
+
+        if genai is not None:
+            try:
+                client = genai.Client(api_key=settings.gemini_api_key)
+                resp = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config={"temperature": settings.temperature, "max_output_tokens": MAX_OUTPUT_TOKENS},
+                )
+                return _accept(model, (resp.text or "").strip())
+            except Exception as exc:  # noqa: BLE001 - try the next model
+                _remember_error(None, f"genai: {type(exc).__name__}: {exc}")
+
+        try:
+            import google.generativeai as genai_legacy  # type: ignore
+        except ImportError:
+            return None  # neither SDK is installed; the REST path already ran
+
+        try:
+            genai_legacy.configure(api_key=settings.gemini_api_key)
+            legacy_model = genai_legacy.GenerativeModel(model)
+            resp = legacy_model.generate_content(
+                prompt,
+                generation_config={
+                    "temperature": settings.temperature,
+                    "max_output_tokens": MAX_OUTPUT_TOKENS,
+                },
+            )
+            return _accept(model, (resp.text or "").strip())
+        except Exception as exc:  # noqa: BLE001 - try the next model
+            _remember_error(None, f"generativeai: {type(exc).__name__}: {exc}")
+    return None
+
+
+def _endpoint(model: str) -> str:
+    return (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:generateContent"
+    )
+
+
+def _payload(prompt: str) -> dict:
+    """Request body. ``thinkingConfig`` keeps the token budget on the answer."""
+    config: dict = {"temperature": settings.temperature, "maxOutputTokens": MAX_OUTPUT_TOKENS}
+    if settings.gemini_thinking_budget >= 0:
+        config["thinkingConfig"] = {"thinkingBudget": settings.gemini_thinking_budget}
+    return {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": config}
+
+
+def _response_text(response) -> str:
+    """Body as text, without assuming the object is a real ``requests`` one."""
     try:
-        from google import genai  # type: ignore
+        return response.text or ""
+    except Exception:  # noqa: BLE001 - fake/odd response in tests
+        try:
+            return json.dumps(response.json())[:400]
+        except Exception:  # noqa: BLE001
+            return ""
 
-        client = genai.Client(api_key=settings.gemini_api_key)
-        resp = client.models.generate_content(
-            model=settings.gemini_model,
-            contents=prompt,
-            config={"temperature": settings.temperature, "max_output_tokens": 512},
-        )
-        return (resp.text or "").strip()
-    except ImportError:
-        pass
-    except Exception:
-        return None
 
+def _error_message(response) -> str:
     try:
-        import google.generativeai as genai_legacy  # type: ignore
-
-        genai_legacy.configure(api_key=settings.gemini_api_key)
-        model = genai_legacy.GenerativeModel(settings.gemini_model)
-        resp = model.generate_content(
-            prompt, generation_config={"temperature": settings.temperature, "max_output_tokens": 512}
-        )
-        return (resp.text or "").strip()
-    except Exception:
-        return None
+        body = response.json()
+    except Exception:  # noqa: BLE001
+        return _response_text(response) or "request failed"
+    error = body.get("error") if isinstance(body, dict) else None
+    if isinstance(error, dict) and error.get("message"):
+        return str(error["message"])
+    return str(error or body)[:200]
 
 
 def _gemini_rest(prompt: str, retries: int | None = None) -> dict | None:
     """Dependency-free REST call with pacing, 429 backoff and a disk cache.
 
-    Returns ``{"text", "usage", "cached", "rate_limited"}`` or None. The cache is
-    consulted first, so re-running an interrupted benchmark costs no quota.
+    Returns ``{"text", "usage", "cached", "rate_limited", "model"}`` or None. The
+    cache is consulted first, so re-running an interrupted benchmark costs no
+    quota. A retired model id (404 NOT_FOUND) moves to the next candidate rather
+    than failing: Google shut down ``gemini-2.0-flash`` on 2026-06-01 and every
+    call to a dead id looks exactly like a typo.
     """
     if not settings.gemini_api_key:
         return None
 
     import requests
 
-    key = cache_key(prompt)
-    stored = cache_load(key)
-    if stored is not None:
-        return {**stored, "cached": True, "rate_limited": 0}
-
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{settings.gemini_model}:generateContent"
-    )
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": settings.temperature, "maxOutputTokens": 512},
-    }
     attempts = (settings.gemini_max_retries if retries is None else retries) + 1
     rate_limited = 0
 
-    for attempt in range(attempts):
-        _pace()
-        try:
-            r = requests.post(
-                url,
-                params={"key": settings.gemini_api_key},
-                json=payload,
-                timeout=60,
-            )
-            if r.status_code in _RETRYABLE_STATUS:
-                if r.status_code == 429:
-                    rate_limited += 1
+    for model in model_candidates():
+        key = cache_key(prompt, model=model)
+        stored = cache_load(key)
+        if stored is not None:
+            return {**stored, "cached": True, "rate_limited": 0, "model": model}
+
+        payload = _payload(prompt)
+        for attempt in range(attempts):
+            _pace()
+            try:
+                r = requests.post(
+                    _endpoint(model),
+                    params={"key": settings.gemini_api_key},
+                    json=payload,
+                    timeout=60,
+                )
+                thinking = "thinking" in str(payload["generationConfig"]).lower()
+                if r.status_code == 400 and thinking and "thinking" in _response_text(r).lower():
+                    # This model rejects the thinking switch: retry once without
+                    # it, without spending a retry attempt.
+                    payload["generationConfig"].pop("thinkingConfig", None)
+                    r = requests.post(
+                        _endpoint(model),
+                        params={"key": settings.gemini_api_key},
+                        json=payload,
+                        timeout=60,
+                    )
+                if _is_model_error(r.status_code, _response_text(r)):
+                    _remember_error(r.status_code, _error_message(r))
+                    break  # dead/unsupported id: try the next candidate
+                if 400 <= r.status_code < 500 and r.status_code not in _RETRYABLE_STATUS:
+                    # 400/401/403: the request or key is wrong. Retrying or
+                    # rotating models cannot help, so report it immediately.
+                    _remember_error(r.status_code, _error_message(r))
+                    return None
+                if r.status_code in _RETRYABLE_STATUS:
+                    if r.status_code == 429:
+                        rate_limited += 1
+                    if attempt == attempts - 1:
+                        _remember_error(r.status_code, _error_message(r))
+                        return None
+                    time.sleep(retry_delay_seconds(r, attempt))
+                    continue
+                r.raise_for_status()
+                data = r.json()
+                usage_meta = data.get("usageMetadata") or {}
+                result = {
+                    "text": data["candidates"][0]["content"]["parts"][0]["text"].strip(),
+                    "usage": {
+                        "input_tokens": int(usage_meta.get("promptTokenCount", 0)),
+                        "output_tokens": int(usage_meta.get("candidatesTokenCount", 0)),
+                    },
+                }
+                cache_store(key, prompt, result, model=model)
+                _accept(model, result["text"])
+                return {**result, "cached": False, "rate_limited": rate_limited, "model": model}
+            except Exception as exc:  # noqa: BLE001 - network/JSON/schema failures
+                _remember_error(None, f"{type(exc).__name__}: {exc}")
                 if attempt == attempts - 1:
                     return None
-                time.sleep(retry_delay_seconds(r, attempt))
-                continue
-            r.raise_for_status()
-            data = r.json()
-            usage_meta = data.get("usageMetadata") or {}
-            result = {
-                "text": data["candidates"][0]["content"]["parts"][0]["text"].strip(),
-                "usage": {
-                    "input_tokens": int(usage_meta.get("promptTokenCount", 0)),
-                    "output_tokens": int(usage_meta.get("candidatesTokenCount", 0)),
-                },
-            }
-            cache_store(key, prompt, result)
-            return {**result, "cached": False, "rate_limited": rate_limited}
-        except Exception:
-            if attempt == attempts - 1:
-                return None
-            time.sleep(min(_MAX_BACKOFF_S, settings.gemini_backoff_base_s * (2**attempt)))
+                time.sleep(min(_MAX_BACKOFF_S, settings.gemini_backoff_base_s * (2**attempt)))
     return None
 
 
@@ -352,7 +480,15 @@ def _extractive(question: str, hits: list[Hit]) -> str:
 
     if best_score < 0.6:
         return REFUSAL
-    return f"{best} [extractive fallback - set GEMINI_API_KEY for LLM answers]"
+    # Say *why* we are extractive: a configured key that failed is a different
+    # problem from no key at all, and the old wording sent people looking for a
+    # missing secret when the real cause was a retired model id.
+    note = (
+        "extractive fallback - Gemini call failed"
+        if settings.gemini_api_key
+        else "extractive fallback - set GEMINI_API_KEY for LLM answers"
+    )
+    return f"{best} [{note}]"
 
 
 # --------------------------------------------------------------------------- #
@@ -454,6 +590,8 @@ def answer(question: str, hits: list[Hit], use_llm: bool = True) -> dict:
     usage = None
     cached = False
     rate_limited = 0
+    llm_error = None
+    model_used = None
     if use_llm and settings.gemini_api_key:
         result = _gemini_rest(prompt)
         if result:
@@ -461,9 +599,14 @@ def answer(question: str, hits: list[Hit], use_llm: bool = True) -> dict:
             used_llm = True
             cached = bool(result.get("cached"))
             rate_limited = int(result.get("rate_limited", 0))
+            model_used = result.get("model")
         else:
             text = _gemini_sdk(prompt)
             used_llm = text is not None
+            if used_llm:
+                model_used = working_model()
+        if not used_llm:
+            llm_error = last_error()
 
     if text is None:
         text = _extractive(question, hits)
@@ -491,6 +634,8 @@ def answer(question: str, hits: list[Hit], use_llm: bool = True) -> dict:
         "used_llm": used_llm,
         "cached": cached,
         "rate_limited": rate_limited,
+        "llm_error": llm_error,
+        "model": model_used,
         "usage": {"input_tokens": input_tokens, "output_tokens": output_tokens},
         "cost_usd": cost_usd(input_tokens, output_tokens),
         # A cache hit consumed no quota in *this* run, so it is not billed here.

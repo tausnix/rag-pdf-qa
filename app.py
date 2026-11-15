@@ -468,6 +468,10 @@ def render_answer_card(trace: dict) -> None:
         )
         if result.get("cached"):
             st.caption("Replayed from the Gemini response cache - no quota used in this run.")
+        if result.get("llm_error"):
+            st.caption(
+                f"Gemini call failed ({result['llm_error']}) - showing the extractive answer."
+            )
         if trace["mode"] == "Hybrid + rerank" and trace["hits"]:
             up = sum(1 for h in trace["hits"]
                      if h.get("rrf_rank") and h["rrf_rank"] > h["rerank_rank"])
