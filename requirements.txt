@@ -26,4 +26,5 @@ datasets>=2.20             # SQuAD 2.0 loader  (only needed to rebuild the bench
 reportlab>=4.2             # writes the corpus PDF (only needed to rebuild the corpus)
 
 # ---- demo app ----
-streamlit>=1.36
+# pills, bordered metrics and width="stretch" tables need a recent Streamlit
+streamlit>=1.50

@@ -12,14 +12,22 @@ chunks. That keeps retrieval evaluation usable offline and is clearly labelled.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 import time
+from pathlib import Path
 
 from .config import REFUSAL, settings
 from .retrieve import Hit
 
 MAX_CONTEXT_CHARS = 6000
+
+# Bump when the cache payload changes, so stale entries are never reused.
+CACHE_VERSION = 1
+_RETRYABLE_STATUS = (429, 500, 502, 503, 504)
+_MAX_BACKOFF_S = 60.0
 
 SYSTEM_PROMPT = """You are a document question-answering assistant.
 Rules:
@@ -48,6 +56,150 @@ def build_prompt(question: str, hits: list[Hit]) -> str:
         f"=== QUESTION ===\n{question}\n\n"
         f"=== ANSWER ==="
     )
+
+
+# --------------------------------------------------------------------------- #
+# Pacing and on-disk response cache
+#
+# Google AI Studio's free tier enforces requests-per-minute across Flash models
+# and rejects bursts with 429 RESOURCE_EXHAUSTED. Two cheap defences keep a
+# 225-query benchmark alive:
+#
+#   * pace calls at ``GEMINI_MIN_INTERVAL_S`` (4 s ~= 15 RPM) and honour the
+#     server's RetryInfo/Retry-After before backing off exponentially;
+#   * write every successful response to ``GEMINI_CACHE_DIR`` keyed by
+#     model + temperature + full prompt, so an interrupted run resumes for free
+#     and a completed run never pays twice.
+# --------------------------------------------------------------------------- #
+_LAST_REQUEST_AT = 0.0
+_MIN_INTERVAL_OVERRIDE: float | None = None
+_CACHE_OVERRIDE: bool | None = None
+
+
+def set_min_interval(seconds: float | None) -> None:
+    """Override the inter-request delay (CLI ``--llm-delay``); None = config."""
+    global _MIN_INTERVAL_OVERRIDE
+    _MIN_INTERVAL_OVERRIDE = seconds
+
+
+def set_cache_enabled(enabled: bool | None) -> None:
+    """Override the disk cache (CLI ``--no-llm-cache``); None = config."""
+    global _CACHE_OVERRIDE
+    _CACHE_OVERRIDE = enabled
+
+
+def min_interval() -> float:
+    if _MIN_INTERVAL_OVERRIDE is not None:
+        return max(0.0, _MIN_INTERVAL_OVERRIDE)
+    return max(0.0, settings.gemini_min_interval_s)
+
+
+def cache_dir() -> Path:
+    """Resolved at call time so tests and one-off runs can redirect it."""
+    return Path(os.getenv("GEMINI_CACHE_DIR") or settings.gemini_cache_dir)
+
+
+def cache_enabled() -> bool:
+    if _CACHE_OVERRIDE is not None:
+        return _CACHE_OVERRIDE
+    raw = os.getenv("GEMINI_CACHE")
+    if raw is None:
+        return settings.gemini_cache
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def cache_key(prompt: str, model: str | None = None, temperature: float | None = None) -> str:
+    """Stable sha256 over everything that can change the completion."""
+    payload = "\x00".join(
+        (
+            f"v{CACHE_VERSION}",
+            model or settings.gemini_model,
+            f"{settings.temperature if temperature is None else temperature:.4f}",
+            prompt,
+        )
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def cache_load(key: str) -> dict | None:
+    """Return ``{"text", "usage"}`` for a previous response, or None."""
+    if not cache_enabled():
+        return None
+    try:
+        data = json.loads((cache_dir() / f"{key}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if data.get("version") != CACHE_VERSION or not data.get("text"):
+        return None
+    return {"text": data["text"], "usage": data.get("usage") or {}}
+
+
+def cache_store(key: str, prompt: str, result: dict) -> None:
+    """Persist one successful response atomically (Ctrl-C safe)."""
+    if not cache_enabled():
+        return
+    path = cache_dir() / f"{key}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": CACHE_VERSION,
+        "model": settings.gemini_model,
+        "temperature": settings.temperature,
+        "prompt_sha256": key,
+        "prompt_chars": len(prompt),
+        "created_at": time.time(),
+        "text": result["text"],
+        "usage": result.get("usage") or {},
+    }
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _pace() -> None:
+    """Sleep so consecutive requests are at least ``min_interval()`` apart."""
+    global _LAST_REQUEST_AT
+    interval = min_interval()
+    now = time.monotonic()
+    if _LAST_REQUEST_AT and interval > 0:
+        wait = _LAST_REQUEST_AT + interval - now
+        if wait > 0:
+            time.sleep(wait)
+            now = time.monotonic()
+    _LAST_REQUEST_AT = now
+
+
+# Retry-After may be plain delta-seconds ("5") and RetryInfo uses "31s".
+_DURATION = re.compile(r"^\s*([0-9]*\.?[0-9]+)\s*s?\s*$")
+
+
+def _parse_duration(value) -> float | None:
+    match = _DURATION.match(str(value)) if value is not None else None
+    return float(match.group(1)) if match else None
+
+
+def retry_delay_seconds(response, attempt: int) -> float:
+    """How long to wait before retrying.
+
+    Priority: ``Retry-After`` header -> ``google.rpc.RetryInfo.retryDelay`` in the
+    JSON body -> exponential backoff from ``GEMINI_BACKOFF_BASE_S``.
+    """
+    try:
+        header = _parse_duration(response.headers.get("retry-after"))
+    except Exception:  # noqa: BLE001 - a fake/odd response object is not fatal
+        header = None
+    if header is not None:
+        return header
+
+    try:
+        body = response.json()
+        for detail in (body.get("error") or {}).get("details") or []:
+            delay = _parse_duration(detail.get("retryDelay"))
+            if delay is not None:
+                return delay
+    except Exception:  # noqa: BLE001
+        pass
+
+    return min(_MAX_BACKOFF_S, settings.gemini_backoff_base_s * (2**attempt))
 
 
 # --------------------------------------------------------------------------- #
@@ -86,15 +238,21 @@ def _gemini_sdk(prompt: str) -> str | None:
         return None
 
 
-def _gemini_rest(prompt: str, retries: int = 3) -> dict | None:
-    """Dependency-free REST fallback: works with just ``requests``.
+def _gemini_rest(prompt: str, retries: int | None = None) -> dict | None:
+    """Dependency-free REST call with pacing, 429 backoff and a disk cache.
 
-    Returns ``{"text": ..., "usage": {"input_tokens", "output_tokens"}}`` or None.
+    Returns ``{"text", "usage", "cached", "rate_limited"}`` or None. The cache is
+    consulted first, so re-running an interrupted benchmark costs no quota.
     """
     if not settings.gemini_api_key:
         return None
 
     import requests
+
+    key = cache_key(prompt)
+    stored = cache_load(key)
+    if stored is not None:
+        return {**stored, "cached": True, "rate_limited": 0}
 
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -104,7 +262,11 @@ def _gemini_rest(prompt: str, retries: int = 3) -> dict | None:
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": settings.temperature, "maxOutputTokens": 512},
     }
-    for attempt in range(retries):
+    attempts = (settings.gemini_max_retries if retries is None else retries) + 1
+    rate_limited = 0
+
+    for attempt in range(attempts):
+        _pace()
         try:
             r = requests.post(
                 url,
@@ -112,23 +274,29 @@ def _gemini_rest(prompt: str, retries: int = 3) -> dict | None:
                 json=payload,
                 timeout=60,
             )
-            if r.status_code in (429, 500, 502, 503, 504):
-                time.sleep(1.5 * (attempt + 1))
+            if r.status_code in _RETRYABLE_STATUS:
+                if r.status_code == 429:
+                    rate_limited += 1
+                if attempt == attempts - 1:
+                    return None
+                time.sleep(retry_delay_seconds(r, attempt))
                 continue
             r.raise_for_status()
             data = r.json()
-            usage = data.get("usageMetadata") or {}
-            return {
+            usage_meta = data.get("usageMetadata") or {}
+            result = {
                 "text": data["candidates"][0]["content"]["parts"][0]["text"].strip(),
                 "usage": {
-                    "input_tokens": int(usage.get("promptTokenCount", 0)),
-                    "output_tokens": int(usage.get("candidatesTokenCount", 0)),
+                    "input_tokens": int(usage_meta.get("promptTokenCount", 0)),
+                    "output_tokens": int(usage_meta.get("candidatesTokenCount", 0)),
                 },
             }
+            cache_store(key, prompt, result)
+            return {**result, "cached": False, "rate_limited": rate_limited}
         except Exception:
-            if attempt == retries - 1:
+            if attempt == attempts - 1:
                 return None
-            time.sleep(1.5 * (attempt + 1))
+            time.sleep(min(_MAX_BACKOFF_S, settings.gemini_backoff_base_s * (2**attempt)))
     return None
 
 
@@ -284,11 +452,15 @@ def answer(question: str, hits: list[Hit], use_llm: bool = True) -> dict:
     text = None
     used_llm = False
     usage = None
+    cached = False
+    rate_limited = 0
     if use_llm and settings.gemini_api_key:
         result = _gemini_rest(prompt)
         if result:
             text, usage = result["text"], result["usage"]
             used_llm = True
+            cached = bool(result.get("cached"))
+            rate_limited = int(result.get("rate_limited", 0))
         else:
             text = _gemini_sdk(prompt)
             used_llm = text is not None
@@ -317,7 +489,10 @@ def answer(question: str, hits: list[Hit], use_llm: bool = True) -> dict:
         "citations": citations,
         "refused": refused,
         "used_llm": used_llm,
+        "cached": cached,
+        "rate_limited": rate_limited,
         "usage": {"input_tokens": input_tokens, "output_tokens": output_tokens},
         "cost_usd": cost_usd(input_tokens, output_tokens),
-        "billable": used_llm,
+        # A cache hit consumed no quota in *this* run, so it is not billed here.
+        "billable": used_llm and not cached,
     }

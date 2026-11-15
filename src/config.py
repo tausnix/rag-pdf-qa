@@ -56,6 +56,19 @@ class Settings:
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     temperature: float = _float("TEMPERATURE", 0.0)
 
+    # --- Gemini free-tier pacing + response cache ---
+    # Free tier enforces RPM across Flash models; ~4 s between calls keeps a long
+    # benchmark inside the limit instead of tripping 429 RESOURCE_EXHAUSTED.
+    gemini_min_interval_s: float = _float("GEMINI_MIN_INTERVAL_S", 4.0)
+    gemini_max_retries: int = _int("GEMINI_MAX_RETRIES", 5)
+    gemini_backoff_base_s: float = _float("GEMINI_BACKOFF_BASE_S", 4.0)
+    gemini_cache: bool = os.getenv("GEMINI_CACHE", "1").strip().lower() not in {
+        "0", "false", "no", "off",
+    }
+    gemini_cache_dir: Path = Path(
+        os.getenv("GEMINI_CACHE_DIR") or (Path.home() / ".cache" / "rag-pdf-qa" / "gemini")
+    )
+
     # --- cost model (USD per 1M tokens, Gemini 2.0 Flash list price) ---
     price_input_per_mtok: float = _float("PRICE_INPUT_PER_MTOK", 0.10)
     price_output_per_mtok: float = _float("PRICE_OUTPUT_PER_MTOK", 0.40)

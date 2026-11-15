@@ -1,10 +1,15 @@
-# RAG PDF QA
+# TraceRAG
 
-**Ask questions about a PDF and get grounded answers with page citations.** A complete
-retrieval-augmented generation pipeline: PyPDFLoader -> chunks -> `all-MiniLM-L6-v2` +
-BM25 -> Reciprocal Rank Fusion -> optional `ms-marco` cross-encoder rerank -> Gemini Flash,
-plus a 225-query benchmark harness that reports Hit Rate, MRR, Answer-in-Context,
-abstention, lexical faithfulness, token cost and retrieval-vs-rerank latency.
+**Hybrid RRF + int8 ONNX reranked PDF QA with retrieval observability.** Ask a PDF a
+question and get a grounded answer with page citations — plus the full trace behind it:
+which chunks were retrieved, how RRF ranked them, where the cross-encoder moved them,
+what the answer cost and whether it is faithful.
+
+Under the hood it is a complete retrieval-augmented generation pipeline: PyPDFLoader ->
+chunks -> `all-MiniLM-L6-v2` + BM25 -> Reciprocal Rank Fusion -> optional `ms-marco`
+cross-encoder rerank -> Gemini Flash, plus a 225-query benchmark harness that reports Hit
+Rate, MRR, Answer-in-Context, abstention, lexical faithfulness, token cost and
+retrieval-vs-rerank latency.
 
 ```
 PDF ──► pages ──► chunks ──► MiniLM vectors ──► ChromaDB
@@ -190,7 +195,7 @@ Then:
 
 ```bash
 python -m src.ask "What was the reported headcount for Norvik Plant?" --show-chunks
-streamlit run app.py            # corpus/mode switch, chat, retrieval trace
+streamlit run app.py            # TraceRAG: split-screen answer + evidence inspector
 ```
 
 Expected CLI output:
@@ -210,29 +215,46 @@ retrieval pipeline, benchmark and UI all work offline. Add a key for real LLM an
 ```bash
 copy .env.example .env          # then paste your key
 # GEMINI_API_KEY=...           https://aistudio.google.com/apikey
-python -m src.benchmark --mode all --llm   # now also scores abstention/cost with Gemini
+
+# Free tier: pace at 4 s per call (15 RPM across Flash models) and keep a resumable
+# cache. If a 429 interrupts the run, re-run the same command: cached prompts replay
+# for free and only the missing queries hit the API.
+python -m src.benchmark --mode all --llm --llm-delay 4
 ```
 
-### The app: every answer is inspectable
+### The app: a split-screen trace for every answer
+
+`streamlit run app.py` opens **TraceRAG** in a warm editorial theme
+(`.streamlit/config.toml`), laid out as a two-column workspace:
+
+- **Preset pills** above the search box — *Exact lookup*, *Rank rescue* and *Trap* for the
+  active corpus. Clicking one runs it immediately; *Rank rescue* also switches to
+  Hybrid + rerank so the promotion is visible.
+- **Left (1.3×)** — the answer card with **PASS / ABSTAINED / FAIL**, cited pages and the
+  top candidate's movement (`RRF #2 → Rerank #1 ↑1`); a four-metric strip (retrieval,
+  rerank, faithfulness/spans, projected cost per 1,000); the candidate table where
+  `CE Confidence` renders as a progress bar; and an optional **Compare vs. Dense
+  Baseline** diff showing what dense returned at #1 versus what reranking promoted.
+- **Right (1×)** — the **Source Evidence Inspector**: pick any rank, read the chunk with
+  the query terms highlighted, and see the score breakdown. On an out-of-domain trap it
+  shows the top candidate's CE confidence and query-term coverage, so the abstention is
+  explainable rather than mysterious.
 
 The sidebar switches **corpus** (built-in handbook, SQuAD 2.0, or your own upload), **mode**
 (dense / hybrid / rerank), and the **number of rerank candidates** (5-15, default 10).
-Switching corpus re-indexes that PDF once; the retriever and cross-encoder are cached for the
-session.
-
-Each answer carries an expandable **Retrieval & Rerank Trace**:
-
-- **Pill bar** -- retrieval ms, rerank ms (plus the actual batch size and padded token width,
-  so dynamic padding is visible), generation ms, faithfulness PASS/FAIL with sentence counts
-  and a numeric-span check, input/output tokens, and projected USD cost.
-- **Candidate rank table** -- every candidate with its **movement** (`RRF #4 → #1 ↑3`), dense
-  similarity, BM25 score, fused RRF score, cross-encoder logit, `P(relevant) = sigmoid(logit)`
-  and page number.
-- **Retrieved text** -- a per-candidate expander with the query terms highlighted.
+Switching corpus re-indexes that PDF once; the ONNX embedder, the int8 cross-encoder and
+the Chroma index are all held in `@st.cache_resource`, so a Streamlit Cloud session pays
+the model load once.
 
 The **Benchmark** tab renders the 3-way tables, latency split, rerank lift and generation
-cost straight from `reports/squad_benchmark.json` and `reports/benchmark.json`; no metric is
-typed into the UI.
+cost straight from `reports/squad_benchmark.json` and `reports/benchmark.json`; no metric
+is typed into the UI.
+
+**Gemini free tier** — calls are paced at `GEMINI_MIN_INTERVAL_S` (4 s ≈ 15 RPM), a 429 is
+retried using `RetryInfo`/`Retry-After` before exponential backoff, and every successful
+response is cached by `sha256(model + temperature + prompt)` under
+`~/.cache/rag-pdf-qa/gemini`. An interrupted 225-query benchmark resumes without spending
+quota twice.
 
 ### Use your own PDF
 
@@ -360,6 +382,11 @@ Every knob is an environment variable (see `src/config.py`).
 | `RERANK_MODEL_DIR` | `~/.cache/rag-pdf-qa/...` | override the downloaded model folder |
 | `GEMINI_API_KEY` | — | enables LLM answers + LLM-scored abstention |
 | `GEMINI_MODEL` | `gemini-2.0-flash` | generator model |
+| `GEMINI_MIN_INTERVAL_S` | `4` | minimum seconds between Gemini calls (free tier ≈ 15 RPM) |
+| `GEMINI_MAX_RETRIES` | `5` | retries after a 429/5xx before falling back to extractive |
+| `GEMINI_BACKOFF_BASE_S` | `4` | exponential backoff base when no `RetryInfo`/`Retry-After` is sent |
+| `GEMINI_CACHE` | `1` | cache successful responses on disk (`--no-llm-cache` disables) |
+| `GEMINI_CACHE_DIR` | `~/.cache/rag-pdf-qa/gemini` | response-cache folder |
 | `PRICE_INPUT_PER_MTOK` | `0.10` | USD per 1M input tokens (list price) |
 | `PRICE_OUTPUT_PER_MTOK` | `0.40` | USD per 1M output tokens (list price) |
 | `FAITHFULNESS_MIN_OVERLAP` | `0.6` | content-word coverage for a sentence to count as supported |
@@ -370,16 +397,18 @@ Every knob is an environment variable (see `src/config.py`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 44 tests, <1 s, no network, no API key
+python -m pytest tests -q      # 56 tests, ~20 s, no network, no API key
 ```
 
 | File | Covers |
 |---|---|
+| `tests/test_app.py` | AppTest smoke tests: TraceRAG brand/tabs/preset pills, split-screen trace, four-metric strip, `CE Confidence` table, dense-baseline diff, abstention explanation, benchmark tables (the live preset run is skipped without a local index) |
 | `tests/test_ingest.py` | footer/header stripping (and that repeated *body* lines survive), chunk size limits, no mid-word cuts, overlap, overlap-safe gold labels |
 | `tests/test_retrieve.py` | RRF consensus ordering, rank-only scoring, dedupe, `k` cutoff, damping behaviour |
 | `tests/test_benchmark.py` | Hit@k boundaries, MRR first-gold-only, Answer-in-Context normalisation, percentile helper |
 | `tests/test_rerank.py` | score-based reordering, `k`/`top_n` cutoffs, unscored tail, query passthrough, empty input, scorer-length guard, sigmoid probability, 256-token cap and instance `top_n` |
 | `tests/test_faithfulness.py` | verbatim answer passes, invented numbers are caught, partial support, unrelated answer scores 0, citation/suffix stripping, char-based token estimate, price math |
+| `tests/test_generate.py` | refusal triggers, prompt grounding rules, context truncation, offline extractive fallback, response-cache round-trip/opt-out, cache-key sensitivity, Retry-After/RetryInfo parsing, pacing, persistent-429 give-up, cached answers are not billed |
 | `tests/test_generate.py` | refusal triggers, prompt grounding rules, context truncation, offline extractive fallback |
 
 CI (`.github/workflows/ci.yml`) runs the suite **before** rebuilding the pipeline, so a
@@ -389,11 +418,12 @@ regression fails the build instead of silently changing the published numbers.
 
 ```text
 rag-pdf-qa/
-├── app.py                     # Streamlit: corpus/mode switch + retrieval & rerank trace
+├── app.py                     # TraceRAG: split-screen answer + evidence inspector
+├── .streamlit/config.toml     # warm editorial light theme
 ├── run_pipeline.py            # corpus -> index -> benchmark -> report
 ├── requirements.txt
 ├── .github/workflows/ci.yml   # tests + full pipeline on every push
-├── tests/                     # pytest suite (no network needed)
+├── tests/                     # pytest suite incl. AppTest UI smoke tests
 ├── src/
 │   ├── config.py              # paths + every tunable
 │   ├── embeddings.py          # MiniLM via sentence-transformers / ONNX / hash

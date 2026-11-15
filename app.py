@@ -1,15 +1,17 @@
-"""Streamlit UI: switch corpora and retrieval modes, ask questions, inspect the trace.
+"""TraceRAG: split-screen PDF QA with retrieval observability.
 
     streamlit run app.py
 
-Two tabs matter:
+The **Ask & Trace** tab is a two-column workspace:
 
-* **Ask** -- retrieval mode (dense / hybrid / rerank), a rerank-candidate slider, and
-  an expandable *Retrieval & Rerank Trace* under every answer: latency pills, token
-  cost, a faithfulness check, the candidate rank table (RRF rank -> rerank rank) and
-  the retrieved text with the query terms highlighted.
-* **Benchmark** -- the saved 3-way reports for both corpora, read straight from
-  ``reports/*.json`` (no numbers are typed into the app).
+* left -- the answer card (faithfulness, citations, rank movement), a 4-metric
+  latency/cost strip, the candidate ranking table with cross-encoder confidence
+  bars, and an optional dense-vs-reranked diff;
+* right -- the Source Evidence Inspector: pick any retrieved chunk, read it with
+  the query terms highlighted, and see why a trap question abstained.
+
+The **Benchmark** tab renders the saved 3-way reports straight from
+``reports/*.json`` -- no metric is typed into the UI.
 """
 from __future__ import annotations
 
@@ -30,7 +32,7 @@ from src.generate import faithfulness
 from src.ingest import ingest
 from src.retrieve import get_retriever
 
-st.set_page_config(page_title="RAG PDF QA", page_icon="📄", layout="wide")
+st.set_page_config(page_title="TraceRAG", page_icon=":material/verified:", layout="wide")
 
 CORPORA = {
     "Built-in handbook": settings.raw_dir / "demo_handbook.pdf",
@@ -44,31 +46,111 @@ MODE_HELP = {
     "Hybrid + rerank": "Fuse, then score the top candidates with a cross-encoder.",
 }
 
+# Preset pills are keyed by the indexed source filename. Clicking one runs it.
+PRESETS: dict[str, list[dict]] = {
+    "demo_handbook.pdf": [
+        {
+            "label": "Exact lookup · Ember Point budget",
+            "question": "What was the reported annual budget for Ember Point?",
+            "mode": None,
+        },
+        {
+            "label": "Rank rescue · Meridian headcount",
+            "question": "What was the reported headcount for Meridian Depot?",
+            "mode": "Hybrid + rerank",
+        },
+        {
+            "label": "Trap · 2026 World Cup winner",
+            "question": "Who won the 2026 FIFA World Cup?",
+            "mode": None,
+        },
+    ],
+    "squad_corpus.pdf": [
+        {
+            "label": "Exact lookup · Kublai Khan",
+            "question": "What was the system of government created by Kublai Khan a product of?",
+            "mode": None,
+        },
+        {
+            "label": "Attribute check · Yuan dynasty",
+            "question": "Which groups were given advantages in the Yuan dynasty?",
+            "mode": "Hybrid + rerank",
+        },
+        {
+            "label": "Trap · 2026 World Cup winner",
+            "question": "Who won the 2026 FIFA World Cup?",
+            "mode": None,
+        },
+    ],
+}
+CUSTOM_PRESETS = [
+    {
+        "label": "Trap · 2026 World Cup winner",
+        "question": "Who won the 2026 FIFA World Cup?",
+        "mode": None,
+    }
+]
+
 CSS = """
 <style>
-  .block-container {padding-top: 2rem; max-width: 1200px;}
-  .metric-card {border:1px solid #2a2f3a; border-radius:12px; padding:14px 16px; background:#11151c;}
-  .metric-card h3 {margin:0 0 4px 0; font-size:12px; color:#8b96a8; font-weight:500; letter-spacing:.04em;}
-  .metric-card p {margin:0; font-size:22px; font-weight:650;}
-  .cite {display:inline-block; background:#1b2430; border:1px solid #2f3b4d; border-radius:999px;
-         padding:2px 10px; margin-right:6px; font-size:12px; color:#9fd0ff;}
-  .pillbar {display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 4px 0;}
-  .pill {display:inline-block; border:1px solid #2f3b4d; border-radius:999px; padding:3px 10px;
-         font-size:12px; color:#c7d1df; background:#141a23;}
-  .pill b {color:#8b96a8; font-weight:500; margin-right:4px;}
-  .pill.ok {border-color:#2f6b48; color:#b7f0cd;}
-  .pill.warn {border-color:#7a5a1f; color:#ffe1a3;}
-  .pill.bad {border-color:#7d3340; color:#ffc3cd;}
-  .chunk {border-left:3px solid #2f3b4d; padding:6px 12px; margin-bottom:10px; font-size:13px; color:#b9c3d1;}
-  mark {background:#3b4f22; color:#e8ffc2; border-radius:3px; padding:0 2px;}
-  .muted {color:#8b96a8; font-size:12px;}
+  .block-container {padding-top: 2.2rem; max-width: 1280px;}
+  .tr-kicker {font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+              color: #9A9385; font-weight: 600; margin-bottom: 2px;}
+  .tr-brand {font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+             font-size: 2.9rem; line-height: 1.05; letter-spacing: -.02em;
+             color: #1F1E1D; margin: 0 0 2px 0;}
+  .tr-sub {color: #5C574D; font-size: 15px; margin: 0 0 6px 0;}
+  .tr-side-brand {font-family: "Iowan Old Style", Palatino, Georgia, serif;
+                  font-size: 1.55rem; letter-spacing: -.01em; color: #1F1E1D;}
+  .tr-q {color: #6B6558; font-size: 13px; margin: 0 0 8px 0;}
+  .tr-q b {color: #1F1E1D;}
+  .tr-answer {font-family: "Iowan Old Style", Palatino, Georgia, serif;
+              font-size: 19px; line-height: 1.62; color: #1F1E1D; margin: 6px 0 4px 0;}
+  .tr-pills {display: flex; flex-wrap: wrap; gap: 6px; align-items: center;}
+  .tr-pill {display: inline-block; border: 1px solid #DED8C8; border-radius: 999px;
+            padding: 2px 10px; font-size: 11.5px; font-weight: 600; letter-spacing: .03em;
+            color: #5C574D; background: #FAF9F5;}
+  .tr-pill.pass {border-color: #9CC3A6; color: #2F6B48; background: #EEF5EF;}
+  .tr-pill.warn {border-color: #E0C08A; color: #8A6220; background: #FBF3E3;}
+  .tr-pill.fail {border-color: #D9A2A2; color: #8C2F2F; background: #F9ECEC;}
+  .tr-move {font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+            font-size: 11.5px; color: #7A4A2E; background: #F6EDE4;
+            border: 1px solid #E5D3C2; border-radius: 6px; padding: 2px 7px;}
+  .tr-cite {display: inline-block; background: #F0EEE6; border: 1px solid #DED8C8;
+            color: #8A4B2F; padding: 0 7px; border-radius: 999px;
+            font-size: 12px; font-weight: 600;}
+  .tr-chunk {background: #FAF9F5; border: 1px solid #E4DFD2; border-radius: 12px;
+             padding: 14px 16px; font-size: 13.5px; line-height: 1.7; color: #2B2926;
+             max-height: 380px; overflow-y: auto;}
+  .tr-badges {display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px 0;}
+  .tr-badge {display: inline-block; background: #F0EEE6; border: 1px solid #DED8C8;
+             border-radius: 6px; padding: 2px 8px; font-size: 11.5px;
+             font-weight: 600; color: #5C574D;}
+  .tr-abstain {background: #FBF3E3; border: 1px solid #E0C08A; border-radius: 12px;
+               padding: 12px 14px; font-size: 13px; color: #5A4317; margin-top: 12px;}
+  .tr-abstain b {color: #8A6220;}
+  .tr-abstain p {margin: 6px 0 0 0;}
+  .tr-empty {border: 1px dashed #D8D2C2; border-radius: 16px; padding: 54px 28px;
+             text-align: center; color: #8A8578; background: #FCFBF8;}
+  .tr-empty h3 {font-family: "Iowan Old Style", Palatino, Georgia, serif;
+                color: #1F1E1D; font-size: 20px; margin: 0 0 6px 0;}
+  .tr-diff-label {font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+                  color: #9A9385; font-weight: 600; margin-bottom: 4px;}
+  .tr-verdict {font-size: 12.5px; color: #5C574D; margin-top: 4px;}
+  .metric-card {border: 1px solid #E4DFD2; border-radius: 12px; padding: 14px 16px;
+                background: #FFFFFF;}
+  .metric-card h3 {margin: 0 0 4px 0; font-size: 12px; color: #8A8578;
+                   font-weight: 600; letter-spacing: .04em;}
+  .metric-card p {margin: 0; font-size: 22px; font-weight: 650; color: #1F1E1D;}
+  mark {background: #F4D3AC; color: #1F1E1D; border-radius: 3px; padding: 0 2px;}
+  code {background: #F0EEE6; border-radius: 4px; padding: 0 4px;}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
 
 # --------------------------------------------------------------------------- #
-# Cached resources
+# Cached resources (ONNX embedder, ONNX cross-encoder, Chroma index)
 # --------------------------------------------------------------------------- #
 @st.cache_resource(show_spinner=False)
 def load_retriever():
@@ -118,10 +200,10 @@ def active_source() -> str:
 def index_pdf(pdf: Path) -> bool:
     """(Re)index ``pdf`` and refresh every cache. Returns True on success."""
     try:
-        with st.spinner(f"Chunking, embedding and indexing {pdf.name}…"):
+        with st.spinner(f"Chunking, embedding and indexing {pdf.name}..."):
             summary = ingest(pdf, reset=True)
         reset_caches()
-        st.session_state.messages = []
+        clear_query_state()
         st.success(f"Indexed {summary['chunks']} chunks from {summary['pages']} pages.")
         return True
     except SystemExit as exc:
@@ -129,6 +211,54 @@ def index_pdf(pdf: Path) -> bool:
     except Exception as exc:  # noqa: BLE001
         st.error(f"Indexing failed: {exc}")
     return False
+
+
+# --------------------------------------------------------------------------- #
+# Session state
+# --------------------------------------------------------------------------- #
+def init_state() -> None:
+    if "trace" not in st.session_state:
+        st.session_state["trace"] = None
+    if "qid" not in st.session_state:
+        st.session_state["qid"] = 0
+    if "pending_question" not in st.session_state:
+        st.session_state["pending_question"] = None
+    if "corpus" not in st.session_state:
+        st.session_state["corpus"] = "Built-in handbook"
+    if "mode" not in st.session_state:
+        st.session_state["mode"] = "Hybrid (RRF)"
+    if "chunks_to_model" not in st.session_state:
+        st.session_state["chunks_to_model"] = settings.context_k
+    if "rerank_candidates" not in st.session_state:
+        st.session_state["rerank_candidates"] = 10
+    if "use_gemini" not in st.session_state:
+        st.session_state["use_gemini"] = bool(settings.gemini_api_key)
+
+
+def clear_query_state() -> None:
+    st.session_state["trace"] = None
+    st.session_state["pending_question"] = None
+    st.session_state["preset_pill"] = None
+
+
+def presets_for(source: str) -> list[dict]:
+    if source in PRESETS:
+        return PRESETS[source]
+    return CUSTOM_PRESETS if source else PRESETS["demo_handbook.pdf"]
+
+
+def _apply_preset() -> None:
+    mapping = st.session_state.get("_preset_map") or {}
+    preset = mapping.get(st.session_state.get("preset_pill"))
+    if not preset:
+        return
+    st.session_state["pending_question"] = preset["question"]
+    if preset.get("mode"):
+        st.session_state["mode"] = preset["mode"]
+
+
+def _clear_preset() -> None:
+    st.session_state["preset_pill"] = None
 
 
 # --------------------------------------------------------------------------- #
@@ -149,9 +279,9 @@ def query_terms(question: str) -> list[str]:
     return sorted(set(terms), key=len, reverse=True)
 
 
-def highlight(text: str, question: str, limit: int = 900) -> str:
+def highlight(text: str, question: str, limit: int = 1400) -> str:
     """Escape the chunk, then wrap every query term in <mark>."""
-    snippet = text[:limit] + ("…" if len(text) > limit else "")
+    snippet = text[:limit] + ("..." if len(text) > limit else "")
     escaped = html.escape(snippet)
     terms = query_terms(question)
     if not terms:
@@ -160,179 +290,35 @@ def highlight(text: str, question: str, limit: int = 900) -> str:
     return pattern.sub(lambda m: f"<mark>{m.group(0)}</mark>", escaped)
 
 
+def answer_markup(text: str) -> str:
+    """Escape the model output, then style [p.N] citations."""
+    safe = re.sub(
+        r"\[p\.(\d+)\]",
+        r"<span class='tr-cite'>p.\1</span>",
+        html.escape(text),
+    )
+    return safe.replace("\n", "<br>")
+
+
+def status_pill(label: str, tone: str = "") -> str:
+    return f"<span class='tr-pill {tone}'>{html.escape(label)}</span>"
+
+
+def fmt_float(value, digits: int = 4) -> str:
+    return f"{value:.{digits}f}" if value is not None else "-"
+
+
 def pct(value) -> str:
     return f"{value * 100:.1f}%" if value is not None else "n/a"
 
 
-def fmt_float(value, digits: int = 4) -> str:
-    return f"{value:.{digits}f}" if value is not None else "—"
-
-
-def pill(label: str, value: str, tone: str = "") -> str:
-    return f"<span class='pill {tone}'><b>{label}</b> {value}</span>"
-
-
-def candidate_rows(hits: list[dict]) -> list[dict]:
-    """Build the rank table. ``hits`` are already in display order."""
-    rows = []
-    for i, h in enumerate(hits, start=1):
-        rows.append(
-            {
-                "#": i,
-                "Page": h["page"],
-                "Dense": fmt_float(h.get("dense_score")),
-                "BM25": fmt_float(h.get("bm25_score"), 2),
-                "RRF": fmt_float(h.get("rrf_score")),
-                "Logit": fmt_float(h.get("logit"), 2),
-                "P(relevant)": fmt_float(h.get("prob"), 3),
-                "Movement": h.get("movement") or "—",
-            }
-        )
-    return rows
-
-
-def render_trace(trace: dict) -> None:
-    timings = trace["timings"]
-    faith = trace.get("faith")
-    result = trace["result"]
-
-    with st.expander("🔎 Retrieval & Rerank Trace", expanded=False):
-        # ------------------------------------------------ latency & cost pills
-        pills = [pill("retrieval", f"{timings['retrieval_ms']:.1f} ms")]
-        if trace["mode"] == "Hybrid + rerank":
-            pills.append(pill("rerank", f"{timings['rerank_ms']:.1f} ms", "warn"))
-            ce = trace.get("cross_encoder") or {}
-            if ce.get("pairs"):
-                pills.append(pill("pairs", f"{ce['pairs']} × {ce['tokens']} tok"))
-        pills.append(pill("generation", f"{timings['generation_ms']:.1f} ms"))
-
-        if faith is None:
-            pills.append(pill("faithfulness", "skipped (abstained)", "warn"))
-        else:
-            ok = faith["score"] == 1.0 and faith["numeric_grounding"]
-            detail = f"{faith['supported']}/{faith['sentences']} sentences"
-            if faith["unsupported_numbers"]:
-                detail += " · unsupported: " + ", ".join(faith["unsupported_numbers"])
-            else:
-                detail += " · numbers ✓"
-            pills.append(pill("faithfulness", ("PASS · " if ok else "FAIL · ") + detail,
-                              "ok" if ok else "bad"))
-
-        usage = result["usage"]
-        pills.append(
-            pill("tokens", f"{usage['input_tokens']:,} in / {usage['output_tokens']:,} out")
-        )
-        basis = "" if result.get("billable") else " projected"
-        pills.append(pill("cost", f"${result['cost_usd']:.5f}{basis}"))
-        st.markdown("<div class='pillbar'>" + "".join(pills) + "</div>",
-                    unsafe_allow_html=True)
-        st.caption(
-            f"{trace['mode']} · {trace.get('top_n', '—')} rerank candidates · "
-            f"{len(trace['hits'])} in trace · {trace['chunks_to_model']} sent to the model"
-        )
-
-        # --------------------------------------------------------- rank table
-        st.markdown("**Candidate ranks**")
-        st.dataframe(
-            candidate_rows(trace["hits"]),
-            hide_index=True,
-            width="stretch",
-        )
-        if trace["mode"] == "Hybrid + rerank":
-            up = sum(1 for h in trace["hits"]
-                     if h.get("rrf_rank") and h.get("rerank_rank")
-                     and h["rrf_rank"] > h["rerank_rank"])
-            down = sum(1 for h in trace["hits"]
-                       if h.get("rrf_rank") and h.get("rerank_rank")
-                       and h["rrf_rank"] < h["rerank_rank"])
-            st.caption(f"Cross-encoder moved {up} candidate(s) up and {down} down. "
-                       "Ranking uses the raw logit; P(relevant) = sigmoid(logit).")
-
-        # ---------------------------------------------------------- previews
-        st.markdown("**Retrieved text** (query terms highlighted)")
-        for i, h in enumerate(trace["hits"], start=1):
-            label = f"#{i} · page {h['page']}"
-            if h.get("movement"):
-                label += f" · {h['movement']}"
-            with st.expander(label):
-                st.markdown(
-                    f"<div class='chunk'>{highlight(h['text'], trace['question'])}</div>",
-                    unsafe_allow_html=True,
-                )
-
-
-# --------------------------------------------------------------------------- #
-# Sidebar
-# --------------------------------------------------------------------------- #
-with st.sidebar:
-    st.title("📄 RAG PDF QA")
-    st.caption("MiniLM + BM25 → RRF → cross-encoder → Gemini Flash")
-
-    # ---------------------------------------------------------------- corpus
-    st.subheader("Corpus")
-    corpus = st.radio(
-        "Corpus",
-        list(CORPORA) + ["Custom PDF"],
-        label_visibility="collapsed",
-    )
-
-    if corpus == "Custom PDF":
-        up = st.file_uploader("Upload a PDF", type=["pdf"])
-        if up and st.button("Index this PDF", width="stretch", type="primary"):
-            dest = settings.raw_dir / up.name
-            dest.write_bytes(up.getbuffer())
-            if index_pdf(dest):
-                st.rerun()
-    else:
-        target = CORPORA[corpus]
-        if not target.exists():
-            st.warning(f"`{target.name}` is not built yet.")
-            if corpus == "SQuAD 2.0" and st.button("Build SQuAD 2.0 corpus", type="primary"):
-                with st.spinner("Sampling SQuAD 2.0 validation contexts…"):
-                    proc = subprocess.run(
-                        [sys.executable, "-m", "src.build_squad_benchmark",
-                         "--contexts", "420", "--target-chunks", "231"],
-                        cwd=settings.root, capture_output=True, text=True,
-                    )
-                if proc.returncode == 0:
-                    reset_caches()
-                    st.rerun()
-                else:
-                    st.error("Build failed — it needs the `datasets` package and network access.")
-        elif active_source() != target.name:
-            # First activation of this corpus: index it once, with a spinner.
-            if index_pdf(target):
-                st.rerun()
-
-    stats = corpus_stats()
-    if stats:
-        st.caption(f"{stats['chunks']} chunks · {stats['pages']} pages · `{stats['source']}`")
-    else:
-        st.info("No index yet. Pick a corpus above or run `python run_pipeline.py`.")
-
-    st.divider()
-
-    # ------------------------------------------------------------ retrieval
-    st.subheader("Retrieval")
-    mode = st.radio("Mode", list(MODES), index=1, help="\n\n".join(
-        f"**{m}** — {MODE_HELP[m]}" for m in MODES
-    ))
-    rerank_top_n = None
-    if mode == "Hybrid + rerank":
-        rerank_top_n = st.slider(
-            "Rerank candidates", 5, 15, 10,
-            help="How many RRF candidates the cross-encoder scores. "
-                 "10 keeps ~95% MRR@10 at ~1/3 less CPU than 15.",
-        )
-        st.caption("First run loads the ONNX model (~22 MB), then it is cached.")
-    k = st.slider("Chunks sent to the model", 1, 10, settings.context_k)
-
-    use_llm = st.toggle(
-        "Use Gemini", value=bool(settings.gemini_api_key),
-        help="Needs GEMINI_API_KEY. Off = extractive answer (free, offline).",
-    )
-    if use_llm and not settings.gemini_api_key:
-        st.warning("No GEMINI_API_KEY found — falling back to extractive answers.")
+def faith_status(faith: dict | None, result: dict) -> tuple[str, str]:
+    if result.get("refused"):
+        return "ABSTAINED", "warn"
+    if faith is None:
+        return "NOT CHECKED", "warn"
+    ok = faith["score"] == 1.0 and faith["numeric_grounding"]
+    return ("PASS", "pass") if ok else ("FAIL", "fail")
 
 
 # --------------------------------------------------------------------------- #
@@ -367,6 +353,19 @@ def run_query(question: str, mode: str, k: int, top_n: int | None,
     else:
         hits = candidates[:k]
         display = candidates
+
+    # Dense-only top-1, for the "Compare vs. Dense Baseline" callout. The query
+    # embedding is already cached, so this is a few milliseconds.
+    baseline = retriever.vector_search(question, k=1)
+    dense_baseline = None
+    if baseline:
+        b = baseline[0]
+        dense_baseline = {
+            "chunk_id": b.chunk_id,
+            "page": b.page,
+            "text": b.text,
+            "score": b.vector_score,
+        }
 
     t3 = time.perf_counter()
     result = generate_answer(question, hits, use_llm=use_llm)
@@ -411,68 +410,248 @@ def run_query(question: str, mode: str, k: int, top_n: int | None,
         "result": result,
         "faith": faith,
         "hits": hit_rows,
+        "dense_baseline": dense_baseline,
     }
 
 
 # --------------------------------------------------------------------------- #
-# Tabs
+# Ask & Trace rendering
 # --------------------------------------------------------------------------- #
-tab_chat, tab_bench, tab_about = st.tabs(["💬 Ask", "📊 Benchmark", "ℹ️ How it works"])
+def render_presets(source: str) -> None:
+    presets = presets_for(source)
+    labels = [p["label"] for p in presets]
+    st.session_state["_preset_map"] = {p["label"]: p for p in presets}
+    if st.session_state.get("preset_pill") not in labels:
+        st.session_state["preset_pill"] = None
 
-# ------------------------------- chat -------------------------------------- #
-with tab_chat:
-    st.header("Ask the document")
-    if not index_exists():
-        st.info("Index a PDF in the sidebar first — or build the demo corpus:\n\n"
-                "```\npython run_pipeline.py\n```")
+    st.caption("One-click demos")
+    st.pills(
+        "Preset questions",
+        labels,
+        key="preset_pill",
+        on_change=_apply_preset,
+        label_visibility="collapsed",
+    )
+
+
+def render_answer_card(trace: dict) -> None:
+    result = trace["result"]
+    faith = trace["faith"]
+    status, tone = faith_status(faith, result)
+
+    with st.container(border=True):
+        st.markdown(
+            f"<div class='tr-q'><b>Q</b> · {html.escape(trace['question'])}</div>",
+            unsafe_allow_html=True,
+        )
+        pills = [status_pill(status, tone), status_pill(trace["mode"])]
+        if result["citations"]:
+            pages = ", ".join(f"p.{p}" for p in result["citations"])
+            pills.append(status_pill(f"cited {pages}"))
+        if trace["mode"] == "Hybrid + rerank" and trace["hits"]:
+            movement = trace["hits"][0].get("movement")
+            if movement:
+                pills.append(f"<span class='tr-move'>{html.escape(movement)}</span>")
+        st.markdown("<div class='tr-pills'>" + "".join(pills) + "</div>",
+                    unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='tr-answer'>{answer_markup(result['answer'])}</div>",
+            unsafe_allow_html=True,
+        )
+        if result.get("cached"):
+            st.caption("Replayed from the Gemini response cache - no quota used in this run.")
+        if trace["mode"] == "Hybrid + rerank" and trace["hits"]:
+            up = sum(1 for h in trace["hits"]
+                     if h.get("rrf_rank") and h["rrf_rank"] > h["rerank_rank"])
+            down = sum(1 for h in trace["hits"]
+                       if h.get("rrf_rank") and h["rrf_rank"] < h["rerank_rank"])
+            st.caption(f"Cross-encoder moved {up} candidate(s) up and {down} down. "
+                       "Ranking uses the raw logit; CE confidence = sigmoid(logit).")
+
+
+def render_metrics(trace: dict) -> None:
+    timings = trace["timings"]
+    result = trace["result"]
+    faith = trace["faith"]
+    ce = trace.get("cross_encoder") or {}
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Retrieval latency", f"{timings['retrieval_ms']:.1f} ms", border=True)
+    if trace["mode"] == "Hybrid + rerank":
+        c2.metric("Rerank latency", f"{timings['rerank_ms']:.1f} ms", border=True,
+                  help=f"{ce.get('pairs', 0)} pairs × {ce.get('tokens', 0)} padded tokens")
     else:
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
+        c2.metric("Rerank latency", "off", border=True,
+                  help="Switch the sidebar to Hybrid + rerank to score candidates.")
 
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-                if msg.get("citations"):
-                    st.markdown(
-                        " ".join(f"<span class='cite'>p.{p}</span>" for p in msg["citations"]),
-                        unsafe_allow_html=True,
-                    )
-                if msg.get("trace"):
-                    render_trace(msg["trace"])
+    if faith is None:
+        c3.metric("Faithfulness / spans", "abstained", border=True,
+                  delta="no answer to verify", delta_color="off")
+    else:
+        c3.metric("Faithfulness / spans", f"{faith['score'] * 100:.0f}%", border=True,
+                  delta=f"{faith['supported']}/{faith['sentences']} sentences",
+                  delta_color="off",
+                  help="Lexical support + numeric grounding. See 'How it works'.")
 
-        question = st.chat_input("Ask something about the document…")
-        if question:
-            st.session_state.messages.append({"role": "user", "content": question})
-            with st.chat_message("user"):
-                st.markdown(question)
+    basis = "actual usage" if result.get("billable") else "projected list price"
+    c4.metric("Projected cost / 1k", f"${result['cost_usd'] * 1000:.2f}", border=True,
+              delta=basis, delta_color="off",
+              help=f"{result['usage']['input_tokens']:,} in / "
+                   f"{result['usage']['output_tokens']:,} out tokens")
 
-            with st.chat_message("assistant"):
-                with st.spinner("Retrieving…" if mode != "Hybrid + rerank"
-                                else "Retrieving and reranking…"):
-                    trace = run_query(question, mode, k, rerank_top_n, use_llm)
 
-                result = trace["result"]
-                st.markdown(result["answer"])
-                if result["citations"]:
-                    st.markdown(
-                        " ".join(f"<span class='cite'>p.{p}</span>" for p in result["citations"]),
-                        unsafe_allow_html=True,
-                    )
-                if result["refused"]:
-                    st.caption("The answer was not present in the retrieved context.")
-                render_trace(trace)
+def render_compare(trace: dict) -> None:
+    if not st.toggle("Compare vs. Dense Baseline", key=f"compare_{st.session_state['qid']}"):
+        return
 
-            st.session_state.messages.append(
-                {
-                    "role": "assistant",
-                    "content": result["answer"],
-                    "citations": result["citations"],
-                    "trace": trace,
-                }
+    base = trace.get("dense_baseline")
+    top = trace["hits"][0] if trace["hits"] else None
+    if base is None or top is None:
+        st.info("No candidates to compare.")
+        return
+
+    left, right = st.columns(2)
+    with left:
+        st.markdown("<div class='tr-diff-label'>Dense-only #1</div>", unsafe_allow_html=True)
+        st.markdown(f"**Page {base['page']}** · cosine {fmt_float(base['score'])}")
+        st.caption(base["text"][:260] + ("..." if len(base["text"]) > 260 else ""))
+    with right:
+        st.markdown("<div class='tr-diff-label'>Hybrid + rerank #1</div>",
+                    unsafe_allow_html=True)
+        st.markdown(f"**Page {top['page']}** · CE {fmt_float(top.get('logit'), 2)}")
+        st.caption(top["text"][:260] + ("..." if len(top["text"]) > 260 else ""))
+
+    if base["chunk_id"] == top["chunk_id"]:
+        verdict = "Both retrievers agree on the top chunk; reranking only reordered the tail."
+    else:
+        verdict = (
+            f"Rerank promoted page {top['page']} over the dense favourite page "
+            f"{base['page']}"
+        )
+        if trace["mode"] != "Hybrid + rerank":
+            verdict += " (compare is most useful in Hybrid + rerank mode)"
+        verdict += "."
+    st.markdown(f"<div class='tr-verdict'>{verdict}</div>", unsafe_allow_html=True)
+
+
+def render_candidates(trace: dict) -> None:
+    rows = []
+    for i, h in enumerate(trace["hits"], start=1):
+        rows.append(
+            {
+                "#": i,
+                "Page": h["page"],
+                "Movement": h.get("movement") or "-",
+                "Dense": round(h["dense_score"], 4) if h["dense_score"] is not None else None,
+                "BM25": round(h["bm25_score"], 2) if h["bm25_score"] is not None else None,
+                "RRF": round(h["rrf_score"], 4) if h["rrf_score"] is not None else None,
+                "CE logit": round(h["logit"], 2) if h["logit"] is not None else None,
+                "CE Confidence": h["prob"] if h["prob"] is not None else 0.0,
+            }
+        )
+    st.markdown("#### Candidate ranking")
+    st.dataframe(
+        rows,
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "CE Confidence": st.column_config.ProgressColumn(
+                "CE Confidence", min_value=0.0, max_value=1.0, format="%.3f"
+            )
+        },
+    )
+    if trace["mode"] != "Hybrid + rerank":
+        st.caption("CE confidence is populated in Hybrid + rerank mode.")
+
+
+def render_abstention(trace: dict) -> None:
+    top = trace["hits"][0] if trace["hits"] else None
+    terms = query_terms(trace["question"])
+    parts = ["<div class='tr-abstain'><b>Why the trace abstained</b>"]
+    if top is None:
+        parts.append("<p>Retrieval returned no chunks, so there was no context to answer from.</p>")
+    else:
+        present = [t for t in terms
+                   if re.search(rf"\b{re.escape(t)}\b", top["text"], re.IGNORECASE)]
+        if top.get("prob") is not None:
+            parts.append(
+                f"<p>Top candidate confidence: <b>{top['prob']:.3f}</b> "
+                f"(sigmoid of CE logit {top['logit']:+.2f}).</p>"
+            )
+        else:
+            parts.append("<p>Cross-encoder reranking is off, so no CE confidence is available.</p>")
+        parts.append(
+            f"<p>Query-term coverage in that chunk: <b>{len(present)}/{len(terms)}</b>"
+            + (f" ({', '.join(html.escape(t) for t in present)})" if present else "")
+            + ".</p>"
+        )
+    parts.append(
+        "<p>The generator returned the refusal sentence instead of answering from "
+        "unrelated context. This is the intended behaviour on an out-of-domain trap.</p></div>"
+    )
+    st.markdown("".join(parts), unsafe_allow_html=True)
+
+
+def render_inspector(trace: dict) -> None:
+    hits = trace["hits"]
+    with st.container(border=True):
+        st.markdown("#### :material/manage_search: Source Evidence Inspector")
+        if not hits:
+            st.info("No chunks retrieved for this question.")
+            return
+
+        chosen = st.selectbox(
+            "Chunk rank",
+            options=list(range(len(hits))),
+            index=0,
+            format_func=lambda i: f"Rank #{i + 1} · Page {hits[i]['page']}",
+            key=f"inspector_{st.session_state['qid']}",
+        )
+        h = hits[chosen]
+
+        badges = [
+            f"<span class='tr-badge'>Page {h['page']}</span>",
+            f"<span class='tr-badge'>Rank #{chosen + 1}</span>",
+        ]
+        if h.get("rrf_rank"):
+            badges.append(f"<span class='tr-badge'>RRF #{h['rrf_rank']}</span>")
+        if h.get("prob") is not None:
+            badges.append(f"<span class='tr-badge'>CE {h['prob']:.3f}</span>")
+        st.markdown("<div class='tr-badges'>" + "".join(badges) + "</div>",
+                    unsafe_allow_html=True)
+
+        st.markdown(
+            f"<div class='tr-chunk'>{highlight(h['text'], trace['question'])}</div>",
+            unsafe_allow_html=True,
+        )
+
+        scores = []
+        if h["dense_score"] is not None:
+            scores.append(f"dense {h['dense_score']:.3f}")
+        if h["bm25_score"] is not None:
+            scores.append(f"BM25 {h['bm25_score']:.1f}")
+        if h["rrf_score"] is not None:
+            scores.append(f"RRF {h['rrf_score']:.4f}")
+        if h["logit"] is not None:
+            scores.append(f"CE logit {h['logit']:+.2f}")
+        if scores:
+            st.caption(" · ".join(scores))
+
+        faith = trace["faith"]
+        if faith is not None:
+            st.caption(
+                f"Grounding: {faith['supported']}/{faith['sentences']} answer sentences "
+                f"supported · unsupported numbers: "
+                f"{', '.join(faith['unsupported_numbers']) or 'none'}"
             )
 
+        if trace["result"]["refused"]:
+            render_abstention(trace)
 
-# ------------------------------ benchmark ---------------------------------- #
+
+# --------------------------------------------------------------------------- #
+# Benchmark tab helpers
+# --------------------------------------------------------------------------- #
 def load_report(path: Path) -> dict | None:
     if not path.exists():
         return None
@@ -513,9 +692,9 @@ def render_report(path: Path, title: str, note: str) -> None:
 
     corpus = data.get("corpus", {})
     st.caption(
-        f"{note} · {corpus.get('chunks', '—')} chunks · "
-        f"embedder `{corpus.get('embedder', '—')}` · "
-        f"generator {data.get('config', {}).get('generator', '—')}"
+        f"{note} · {corpus.get('chunks', '-')} chunks · "
+        f"embedder `{corpus.get('embedder', '-')}` · "
+        f"generator {data.get('config', {}).get('generator', '-')}"
     )
     st.dataframe(report_table(data), hide_index=True, width="stretch")
 
@@ -536,7 +715,7 @@ def render_report(path: Path, title: str, note: str) -> None:
         delta = data.get("delta_rerank_vs_hybrid", {})
         if delta:
             st.caption(
-                f"Rerank lift over RRF — Hit@3 {delta['hit_rate@3'] * 100:+.1f} pts · "
+                f"Rerank lift over RRF - Hit@3 {delta['hit_rate@3'] * 100:+.1f} pts · "
                 f"MRR@10 {delta['mrr@10'] * 100:+.1f} pts · "
                 f"added {rerank.get('rerank_p50_ms', 0):.0f} ms/query"
             )
@@ -550,19 +729,176 @@ def render_report(path: Path, title: str, note: str) -> None:
             )
 
 
+# --------------------------------------------------------------------------- #
+# Sidebar
+# --------------------------------------------------------------------------- #
+init_state()
+
+with st.sidebar:
+    st.markdown("### :material/verified: TraceRAG")
+    st.caption("Hybrid RRF + int8 ONNX reranking, traced end to end.")
+
+    st.markdown("#### :material/folder_open: Corpus")
+    corpus = st.radio(
+        "Corpus",
+        list(CORPORA) + ["Custom PDF"],
+        key="corpus",
+        label_visibility="collapsed",
+    )
+
+    if corpus == "Custom PDF":
+        uploaded = st.file_uploader("Upload a PDF", type=["pdf"])
+        if uploaded and st.button("Index this PDF", width="stretch", type="primary"):
+            dest = settings.raw_dir / uploaded.name
+            dest.write_bytes(uploaded.getbuffer())
+            if index_pdf(dest):
+                st.rerun()
+    else:
+        target = CORPORA[corpus]
+        if not target.exists():
+            st.warning(f"`{target.name}` is not built yet.")
+            if corpus == "SQuAD 2.0" and st.button("Build SQuAD 2.0 corpus", type="primary"):
+                with st.spinner("Sampling SQuAD 2.0 validation contexts..."):
+                    proc = subprocess.run(
+                        [sys.executable, "-m", "src.build_squad_benchmark",
+                         "--contexts", "420", "--target-chunks", "231"],
+                        cwd=settings.root, capture_output=True, text=True,
+                    )
+                if proc.returncode == 0:
+                    reset_caches()
+                    st.rerun()
+                else:
+                    st.error("Build failed - it needs the `datasets` package and network access.")
+        elif active_source() != target.name:
+            # First activation of this corpus: index it once, with a spinner.
+            if index_pdf(target):
+                st.rerun()
+
+    stats = corpus_stats()
+    if stats:
+        st.caption(
+            f"{stats['chunks']} chunks · {stats['pages']} pages · `{stats['source']}`"
+        )
+    else:
+        st.info("No index yet. Pick a corpus above or run `python run_pipeline.py`.")
+
+    st.divider()
+
+    st.markdown("#### :material/tune: Retrieval")
+    mode = st.radio(
+        "Mode",
+        list(MODES),
+        key="mode",
+        help="\n\n".join(f"**{m}** - {MODE_HELP[m]}" for m in MODES),
+    )
+    rerank_top_n = None
+    if mode == "Hybrid + rerank":
+        rerank_top_n = st.slider(
+            "Rerank candidates", 5, 15, key="rerank_candidates",
+            help="How many RRF candidates the cross-encoder scores. "
+                 "10 keeps ~95% MRR@10 at ~1/3 less CPU than 15.",
+        )
+        st.caption("First run loads the int8 ONNX model (~22 MB), then it is cached.")
+
+    k = st.slider("Chunks sent to the model", 1, 10, key="chunks_to_model")
+
+    use_llm = st.toggle(
+        "Use Gemini",
+        key="use_gemini",
+        help="Needs GEMINI_API_KEY. Off = extractive answer (free, offline).",
+    )
+    if use_llm and not settings.gemini_api_key:
+        st.warning("No GEMINI_API_KEY found - falling back to extractive answers.")
+
+    st.divider()
+    if settings.gemini_api_key:
+        st.caption(
+            f"Gemini pacing: {settings.gemini_min_interval_s:.0f}s between calls · "
+            f"{settings.gemini_max_retries} retries · response cache on disk."
+        )
+    else:
+        st.caption("Offline extractive mode. Add a Gemini key for LLM answers.")
+
+
+# --------------------------------------------------------------------------- #
+# Header + tabs
+# --------------------------------------------------------------------------- #
+st.markdown(
+    "<div class='tr-kicker'>Retrieval observability · MiniLM + BM25 + ONNX cross-encoder</div>"
+    "<div class='tr-brand'>TraceRAG</div>"
+    "<div class='tr-sub'>Hybrid RRF + int8 ONNX reranked PDF QA with retrieval "
+    "observability - every answer ships with its evidence.</div>",
+    unsafe_allow_html=True,
+)
+
+tab_chat, tab_bench, tab_about = st.tabs(
+    [":material/search: Ask & Trace", ":material/bar_chart: Benchmark",
+     ":material/info: How it works"]
+)
+
+# ------------------------------- ask & trace ------------------------------- #
+with tab_chat:
+    render_presets(active_source())
+
+    typed = st.chat_input("Ask something about this document...", on_submit=_clear_preset)
+    pending = st.session_state.get("pending_question")
+    st.session_state["pending_question"] = None
+    question = typed or pending
+
+    if question:
+        spinner = (
+            "Retrieving, reranking and generating..." if mode == "Hybrid + rerank"
+            else "Retrieving and generating..."
+        )
+        with st.spinner(spinner):
+            trace = run_query(question, mode, k, rerank_top_n, use_llm)
+        st.session_state["qid"] += 1
+        st.session_state["trace"] = trace
+
+    trace = st.session_state.get("trace")
+    left, right = st.columns([1.3, 1], gap="large")
+
+    with left:
+        if trace is None:
+            st.markdown(
+                "<div class='tr-empty'><h3>Every answer is inspectable</h3>"
+                "<p>Pick a preset above or ask your own question. The left column shows "
+                "the answer and telemetry; the right column shows the exact chunks the "
+                "answer was built from.</p></div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            render_answer_card(trace)
+            render_metrics(trace)
+            render_compare(trace)
+            render_candidates(trace)
+
+    with right:
+        if trace is None:
+            with st.container(border=True):
+                st.markdown("#### :material/manage_search: Source Evidence Inspector")
+                st.markdown(
+                    "<div class='tr-empty'><p>Retrieved chunks, highlighted query terms "
+                    "and the reason for an abstention will appear here.</p></div>",
+                    unsafe_allow_html=True,
+                )
+        else:
+            render_inspector(trace)
+
+# -------------------------------- benchmark -------------------------------- #
 with tab_bench:
-    st.header("Retrieval benchmark")
-    st.caption("Read directly from `reports/*.json` — the same files the README quotes.")
+    st.header(":material/bar_chart: Retrieval benchmark")
+    st.caption("Read directly from `reports/*.json` - the same files the README quotes.")
     render_report(
         settings.reports_dir / "squad_benchmark.json",
-        "SQuAD 2.0 · 230 chunks",
+        ":material/table_chart: SQuAD 2.0 · 230 chunks",
         "167 passages (129 with questions + 38 distractors) · "
         "150 answerable / 50 unanswerable / 25 out-of-domain",
     )
     st.divider()
     render_report(
         settings.reports_dir / "benchmark.json",
-        "Synthetic handbook · 230 chunks",
+        ":material/table_chart: Synthetic handbook · 230 chunks",
         "61-page generated corpus · 150 answerable / 50 unanswerable / 25 out-of-domain",
     )
     top10 = settings.reports_dir / "squad_benchmark_top10.json"
@@ -590,41 +926,49 @@ with tab_bench:
                     "about a third, which is why the interactive slider defaults to 10."
                 )
 
-
-# -------------------------------- about ------------------------------------ #
+# -------------------------------- how it works ----------------------------- #
 with tab_about:
-    st.header("How it works")
+    st.header(":material/info: How it works")
     st.markdown(
         """
-**Indexing** — `PyPDFLoader` reads the PDF page by page (page numbers are kept for
+**Indexing** - `PyPDFLoader` reads the PDF page by page (page numbers are kept for
 citations). Pages are split into ~800-character overlapping chunks, embedded with
 `all-MiniLM-L6-v2`, and stored in **ChromaDB**. A **BM25** index is built over the
 same chunks for exact-term matching. The corpus selector re-indexes the chosen PDF
-once; the retriever is then cached for the session.
+once; the retriever and cross-encoder are then cached for the session.
 
-**Retrieval modes** — *dense* searches embeddings only; *hybrid* fuses dense + BM25
+**Retrieval modes** - *dense* searches embeddings only; *hybrid* fuses dense + BM25
 with **Reciprocal Rank Fusion** (`RRF(d) = Σ 1 / (60 + rank_i(d))`); *rerank* takes
 the fused top-N and scores each `(query, chunk)` pair with
 `ms-marco-MiniLM-L-6-v2`, an int8 ONNX cross-encoder run on CPU with no PyTorch.
 
-**Why reranking is opt-in** — the cross-encoder reads the question and the chunk
-together, which fixes “same entity, wrong attribute” confusions that RRF cannot. But
-it is a second transformer pass over every candidate, and on this 2-core CPU that is
+**Why reranking is opt-in** - the cross-encoder reads the question and the chunk
+together, which fixes "same entity, wrong attribute" confusions that RRF cannot. But
+it is a second transformer pass over every candidate, and on a 2-core CPU that is
 hundreds of milliseconds. The slider trades quality for latency: 10 candidates keeps
 ~95% MRR@10 on SQuAD at roughly two thirds of the top-15 cost. Pairs are padded only
 to the longest pair in each batch (capped at 256 tokens), so short chunks are cheap.
 
-**Trace** — every answer records retrieval, rerank and generation timings separately,
-the exact RRF rank of each candidate and where the cross-encoder moved it, both
-component scores, the relevance probability, the token counts and the projected USD
-cost. **Faithfulness** is a lexical check: each answer sentence must share enough
-content words with a context sentence, and every number in the answer must appear in
-the context. With the offline extractive path it passes by construction; run with a
-Gemini key to make it meaningful.
+**The trace** - every answer records retrieval, rerank and generation timings
+separately, the exact RRF rank of each candidate and where the cross-encoder moved
+it, both component scores, the relevance probability, the token counts and the
+projected USD cost. **Faithfulness** is a lexical check: each answer sentence must
+share enough content words with a context sentence, and every number in the answer
+must appear in the context. With the offline extractive path it passes by
+construction; run with a Gemini key to make it meaningful.
 
-**Benchmark** — the JSON reports are generated by `src/benchmark.py`; the app never
+**Presets** - the three pills are a guided tour: an *exact lookup* that both
+retrievers get right, a *rank rescue* where dense misses and the cross-encoder
+promotes the gold page, and an out-of-domain *trap* that must abstain.
+
+**Benchmark** - the JSON reports are generated by `src/benchmark.py`; the app never
 hard-codes a metric. Hit@3 asks whether any gold chunk is in the top 3, MRR@10
 measures the rank of the first gold chunk, Ans-in-Context@5 is the generator's
 ceiling, and abstention is measured on the 75 negatives.
+
+**Free-tier safety** - Gemini calls are paced (`GEMINI_MIN_INTERVAL_S`, default 4 s),
+429s back off using `RetryInfo`/`Retry-After`, and every successful response is
+cached by `sha256(model + temperature + prompt)` under `~/.cache/rag-pdf-qa/gemini`,
+so an interrupted 225-query benchmark resumes without spending quota twice.
         """
     )

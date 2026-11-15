@@ -25,7 +25,14 @@ from pathlib import Path
 
 from .config import settings
 from .generate import answer as generate_answer
-from .generate import faithfulness
+from .generate import (
+    cache_dir,
+    cache_enabled,
+    faithfulness,
+    min_interval,
+    set_cache_enabled,
+    set_min_interval,
+)
 from .retrieve import Retriever, get_retriever
 
 _NORM = re.compile(r"[^a-z0-9 ]+")
@@ -89,6 +96,7 @@ def evaluate(
     mrr_k: int = 10,
     ctx_k: int = 5,
     reranker=None,
+    progress_every: int = 25,
 ) -> dict:
     answerable = [q for q in queries if q["type"] == "answerable"]
     negatives = [q for q in queries if q["type"] != "answerable"]
@@ -109,8 +117,9 @@ def evaluate(
     cost_total = 0.0
     generated = 0
     billable = False
+    live_calls = cached_calls = llm_fallbacks = rate_limited = 0
 
-    for q in queries:
+    for i, q in enumerate(queries, start=1):
         t0 = time.perf_counter()
         if mode == "rerank":
             candidates = retriever.hybrid_search(q["question"], k=settings.rerank_top_n)
@@ -151,6 +160,13 @@ def evaluate(
             out_tokens += res["usage"]["output_tokens"]
             cost_total += res["cost_usd"]
             billable = billable or res.get("billable", False)
+            rate_limited += int(res.get("rate_limited", 0))
+            if res.get("cached"):
+                cached_calls += 1
+            elif res.get("used_llm"):
+                live_calls += 1
+            else:
+                llm_fallbacks += 1
 
             if q["type"] == "answerable":
                 if res["refused"]:
@@ -161,6 +177,14 @@ def evaluate(
                 refused_negatives += 1
             else:
                 answered_negatives += 1
+
+            if progress_every and i % progress_every == 0:
+                print(
+                    f"  [{mode}] {i}/{len(queries)} · {live_calls} live · "
+                    f"{cached_calls} cached · {rate_limited} rate-limited · "
+                    f"{llm_fallbacks} fallback",
+                    flush=True,
+                )
 
     n = len(answerable) or 1
     out = {
@@ -191,10 +215,23 @@ def evaluate(
             "output": out_tokens / generated,
         } if generated else {"input": 0, "output": 0}
         out["cost_per_1k_queries_usd"] = (cost_total / generated * 1000.0) if generated else 0.0
-        out["cost_basis"] = (
-            "actual API usage" if billable
-            else "projected from list price (no API call was made)"
-        )
+        out["llm_calls"] = {
+            "live": live_calls,
+            "cached": cached_calls,
+            "fallbacks": llm_fallbacks,
+        }
+        out["rate_limited_responses"] = rate_limited
+        if billable:
+            basis = "actual API usage"
+            if cached_calls:
+                basis += f" ({cached_calls} responses replayed from disk cache)"
+        elif cached_calls and not live_calls:
+            basis = "projected from list price (all responses replayed from disk cache)"
+        elif cached_calls:
+            basis = f"projected from list price ({cached_calls} from disk cache)"
+        else:
+            basis = "projected from list price (no API call was made)"
+        out["cost_basis"] = basis
         out["generator"] = (
             settings.gemini_model if settings.gemini_api_key else "extractive (no API key)"
         )
@@ -277,9 +314,21 @@ def write_report(results: dict, path: Path) -> None:
                 f"- Generator: {r['generator']}",
                 f"- Tokens/query: {r['tokens_per_query']['input']:.0f} in / "
                 f"{r['tokens_per_query']['output']:.0f} out",
-                f"- Cost per 1,000 queries: **${r['cost_per_1k_queries_usd']:.2f}**",
+                f"- Cost per 1,000 queries: **${r['cost_per_1k_queries_usd']:.2f}** "
+                f"({r.get('cost_basis', '')})",
                 f"- Generation p50: {r['generation_p50_ms']:.0f} ms",
             ]
+            calls = r.get("llm_calls")
+            if calls:
+                md.append(
+                    f"- LLM calls: {calls['live']} live | {calls['cached']} from cache | "
+                    f"{calls['fallbacks']} fell back to extractive"
+                )
+                if r.get("rate_limited_responses"):
+                    md.append(
+                        f"- 429 responses absorbed: {r['rate_limited_responses']} "
+                        f"(paced at {min_interval():.1f} s, retried with backoff)"
+                    )
 
     md += ["", "> Latency is split: retrieval = embed + search + fuse; "
                 "rerank = cross-encoder over the candidates."]
@@ -301,9 +350,29 @@ def main() -> None:
         help="'all' = dense + hybrid + rerank",
     )
     ap.add_argument("--llm", action="store_true", help="score abstention/faithfulness/cost with Gemini")
+    ap.add_argument(
+        "--llm-delay", type=float, default=None, metavar="SECONDS",
+        help="minimum seconds between Gemini calls (default GEMINI_MIN_INTERVAL_S, 4 s)",
+    )
+    ap.add_argument(
+        "--no-llm-cache", action="store_true",
+        help="disable the on-disk Gemini response cache (re-running then re-bills every query)",
+    )
     ap.add_argument("--limit", type=int, default=0, help="use only the first N queries")
     ap.add_argument("--out", type=Path, default=settings.reports_dir / "benchmark.json")
     args = ap.parse_args()
+
+    if args.llm_delay is not None:
+        set_min_interval(args.llm_delay)
+    if args.no_llm_cache:
+        set_cache_enabled(False)
+    if args.llm:
+        print(
+            f"Gemini: {min_interval():.1f}s between calls, "
+            f"{settings.gemini_max_retries} retries, cache "
+            f"{cache_dir() if cache_enabled() else 'disabled'}",
+            flush=True,
+        )
 
     queries = load_queries(args.queries)
     if args.limit:
@@ -345,6 +414,8 @@ def main() -> None:
             "rerank_top_n": settings.rerank_top_n,
             "generator": settings.gemini_model if (args.llm and settings.gemini_api_key)
             else "extractive (no LLM)",
+            "llm_min_interval_s": min_interval() if args.llm else None,
+            "llm_cache": bool(cache_enabled()) if args.llm else None,
         },
         "splits": {
             "answerable": sum(1 for q in queries if q["type"] == "answerable"),
@@ -366,6 +437,19 @@ def main() -> None:
         }
 
     write_report(results, args.out)
+    for key in selected:
+        fallbacks = (results[key].get("llm_calls") or {}).get("fallbacks", 0)
+        if args.llm and fallbacks:
+            hint = (
+                f"Re-run the same command to fill them from {cache_dir()}."
+                if cache_enabled()
+                else "The disk cache is disabled, so those queries must be re-billed."
+            )
+            print(
+                f"WARNING: {key}: {fallbacks} quer{'y' if fallbacks == 1 else 'ies'} fell back to "
+                f"extractive (quota exhausted or network error). {hint}",
+                flush=True,
+            )
     summary = {
         k: {m: round(v, 4) if isinstance(v, float) else v
             for m, v in results[k].items() if m in ("hit_rate@3", "mrr@10", "latency_p50_ms")}
