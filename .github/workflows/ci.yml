@@ -15,24 +15,21 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: requirements.txt
 
       - name: Install
-        working-directory: rag-pdf-qa
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
 
       - name: Unit tests
-        working-directory: rag-pdf-qa
         run: python -m pytest tests -q
 
       - name: Build corpus, index and benchmark
-        working-directory: rag-pdf-qa
         run: python run_pipeline.py
 
       - name: Health check
-        working-directory: rag-pdf-qa
         run: python scripts/smoke_test.py
 
       - name: Upload benchmark report
@@ -40,5 +37,7 @@ jobs:
         with:
           name: benchmark
           path: |
-            rag-pdf-qa/reports/benchmark.json
-            rag-pdf-qa/reports/benchmark.md
+            reports/benchmark.json
+            reports/benchmark.md
+            reports/squad_benchmark.json
+            reports/squad_benchmark.md

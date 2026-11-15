@@ -175,6 +175,7 @@ reported separately instead of blended into one "cheap and fast" claim.
 ## Quickstart
 
 ```bash
+git clone https://github.com/tausnix/rag-pdf-qa.git
 cd rag-pdf-qa
 
 python -m venv .venv
