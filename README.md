@@ -338,6 +338,13 @@ text and metadata. Embeddings come from `sentence-transformers` when available, 
 ONNX export of the same weights driven directly through `onnxruntime` (a tuned session infers
 a query in ~16 ms; chromadb's bundled wrapper needs ~350 ms because it rebuilds work per call).
 
+Chroma's Rust core is not always healthy — on Streamlit Cloud (Linux + Python 3.12) it raises
+`'RustBindingsAPI' object has no attribute 'bindings'`. That is an environment bug, not a
+retrieval bug, so `src/vectorstore.py` keeps a NumPy cosine index beside it. Embeddings are
+unit-length, so a dot product *is* the cosine; we report Chroma's squared-L2 distance
+(`2 - 2cos`), which makes the fallback bit-for-bit equivalent — same top-k, same ordering,
+same scores (verified against a live Chroma collection).
+
 **5 - Retrieve.** Dense search finds paraphrases. BM25 finds what embeddings blur: names,
 numbers, IDs, acronyms. Use both. Normalised query embeddings are `lru_cache`d, so a repeated
 question skips the encoder entirely (visible in `Retriever.query_cache_info()`).
@@ -408,7 +415,7 @@ Every knob is an environment variable (see `src/config.py`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 56 tests, ~20 s, no network, no API key
+python -m pytest tests -q      # 65 tests, ~25 s, no network, no API key
 ```
 
 | File | Covers |
@@ -420,7 +427,7 @@ python -m pytest tests -q      # 56 tests, ~20 s, no network, no API key
 | `tests/test_rerank.py` | score-based reordering, `k`/`top_n` cutoffs, unscored tail, query passthrough, empty input, scorer-length guard, sigmoid probability, 256-token cap and instance `top_n` |
 | `tests/test_faithfulness.py` | verbatim answer passes, invented numbers are caught, partial support, unrelated answer scores 0, citation/suffix stripping, char-based token estimate, price math |
 | `tests/test_generate.py` | refusal triggers, prompt grounding rules, context truncation, offline extractive fallback, response-cache round-trip/opt-out, cache-key sensitivity, Retry-After/RetryInfo parsing, pacing, persistent-429 give-up, cached answers are not billed |
-| `tests/test_generate.py` | refusal triggers, prompt grounding rules, context truncation, offline extractive fallback |
+| `tests/test_vectorstore.py` | NumPy fallback ordering and Chroma-shaped results, metadata equality/`$in` filtering, checkpoint round-trip, `RustBindingsAPI` AttributeError falls back cleanly, missing checkpoint self-heals from `chunks.jsonl` |
 
 CI (`.github/workflows/ci.yml`) runs the suite **before** rebuilding the pipeline, so a
 regression fails the build instead of silently changing the published numbers.
@@ -441,6 +448,7 @@ rag-pdf-qa/
 │   ├── embeddings.py          # MiniLM via sentence-transformers / ONNX / hash
 │   ├── ingest.py              # PDF load, boilerplate strip, chunk, index
 │   ├── retrieve.py            # dense, BM25, RRF fusion, query-embedding cache
+│   ├── vectorstore.py         # ChromaDB + NumPy cosine fallback (same scores)
 │   ├── rerank.py              # cross-encoder rerank (int8 ONNX, no PyTorch)
 │   ├── generate.py            # Gemini prompt, refusal, faithfulness, token cost
 │   ├── ask.py                 # CLI
@@ -450,7 +458,7 @@ rag-pdf-qa/
 ├── scripts/smoke_test.py      # health check
 ├── data/
 │   ├── raw/                   # PDFs
-│   ├── index/                 # chunks.jsonl + bm25.pkl (gitignored)
+│   ├── index/                 # chunks.jsonl + bm25.pkl + vectors.npz (gitignored)
 │   └── eval/                  # queries.jsonl + corpus_manifest.json
 ├── chroma/                    # persistent vector store (gitignored)
 └── reports/                   # benchmark.json/md, squad_benchmark.json/md (+ top-10 run)

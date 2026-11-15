@@ -68,8 +68,6 @@ class Retriever:
 
     # ------------------------------------------------------------------ load
     def load(self) -> "Retriever":
-        import chromadb
-
         if not settings.bm25_pickle.exists():
             raise SystemExit("Index missing. Run:  python -m src.ingest --pdf <file.pdf>")
 
@@ -79,8 +77,7 @@ class Retriever:
         self._ids = blob["ids"]
 
         self._embedder = Embedder()
-        client = chromadb.PersistentClient(path=str(settings.chroma_dir))
-        self._collection = client.get_collection(settings.collection_name)
+        self._collection = self._open_vector_store()
 
         # warm the text/metadata cache from the chunk store
         import json
@@ -96,6 +93,66 @@ class Retriever:
                 "chunk_index": c["chunk_index"],
             }
         return self
+
+    def _open_vector_store(self):
+        """Chroma when it is usable, else the NumPy cosine index.
+
+        Chroma on Streamlit Cloud (Linux + Python 3.12) can raise
+        ``AttributeError: 'RustBindingsAPI' object has no attribute 'bindings'``
+        on the very first client call. Rather than fail the whole app we fall
+        back to ``data/index/vectors.npz``, which ``ingest`` always writes and
+        which returns Chroma-shaped results with the same scores and ranking.
+
+        If the checkpoint is missing (an earlier ingest died before writing it)
+        we rebuild it from ``chunks.jsonl`` with the embedder we already hold,
+        so the app self-heals without a re-index.
+        """
+        import json
+
+        from .vectorstore import NumpyVectorIndex, is_chroma_bindings_error
+
+        try:
+            import chromadb
+
+            client = chromadb.PersistentClient(path=str(settings.chroma_dir))
+            return client.get_collection(settings.collection_name)
+        except Exception as exc:  # noqa: BLE001 - any Chroma failure routes to NumPy
+            if not settings.chunks_jsonl.exists():
+                raise SystemExit(
+                    "ChromaDB could not be opened "
+                    f"({type(exc).__name__}: {exc}) and there is no chunk store at "
+                    f"{settings.chunks_jsonl}. Rebuild with: python run_pipeline.py"
+                ) from exc
+
+            reason = (
+                "Rust bindings unavailable"
+                if is_chroma_bindings_error(exc)
+                else f"{type(exc).__name__}: {exc}"
+            )
+            print(
+                f"WARNING: ChromaDB unavailable ({reason}); "
+                "using the NumPy cosine index instead.",
+                flush=True,
+            )
+
+            if settings.vectors_npz.exists():
+                return NumpyVectorIndex.load(settings.index_dir)
+
+            chunks = [
+                json.loads(line)
+                for line in settings.chunks_jsonl.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            ids = [c["chunk_id"] for c in chunks]
+            vectors = self._embedder.encode([c["text"] for c in chunks])
+            index = NumpyVectorIndex.from_chunks(
+                settings.index_dir, ids, vectors, chunks, save=False
+            )
+            try:
+                index.save(settings.index_dir)
+            except OSError:
+                pass  # read-only filesystem: keep the in-memory copy
+            return index
 
     # ------------------------------------------------------------- retrieve
     def _embed_query_uncached(self, normalised: str) -> np.ndarray:

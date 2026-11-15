@@ -2,6 +2,9 @@
 pypdf>=4.2                 # PDF text extraction (PyPDFLoader backend)
 rank-bm25>=0.2.2           # lexical retriever
 chromadb>=0.5,<2           # persistent vector store
+# Chroma 1.x on Linux/py3.12 can ship broken Rust bindings
+# ('RustBindingsAPI' object has no attribute 'bindings'). src/vectorstore.py
+# falls back to data/index/vectors.npz, so this range is safe either way.
 numpy>=1.26
 python-dotenv>=1.0
 

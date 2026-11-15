@@ -963,7 +963,9 @@ with tab_about:
 **Indexing** - `PyPDFLoader` reads the PDF page by page (page numbers are kept for
 citations). Pages are split into ~800-character overlapping chunks, embedded with
 `all-MiniLM-L6-v2`, and stored in **ChromaDB**. A **BM25** index is built over the
-same chunks for exact-term matching. The corpus selector re-indexes the chosen PDF
+same chunks for exact-term matching. If Chroma's Rust bindings are unavailable (seen on
+Streamlit Cloud + Python 3.12) retrieval falls back to a NumPy cosine index with identical
+scores, so the app keeps working. The corpus selector re-indexes the chosen PDF
 once; the retriever and cross-encoder are then cached for the session.
 
 **Retrieval modes** - *dense* searches embeddings only; *hybrid* fuses dense + BM25

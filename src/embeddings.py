@@ -142,10 +142,10 @@ def _find_onnx_dir() -> Path:
     # the object alone would silently do nothing on a clean machine (e.g. CI).
     from chromadb.utils import embedding_functions
 
-    embedder = embedding_functions.ONNXMiniLM_L6_V2()
     try:
+        embedder = embedding_functions.ONNXMiniLM_L6_V2()
         embedder._download_model_if_not_exists()
-    except Exception as exc:  # noqa: BLE001 - network/SHA failures all land here
+    except Exception as exc:  # noqa: BLE001 - network/SHA/broken-chromadb failures
         raise SystemExit(
             "Could not download the MiniLM ONNX model "
             f"({type(exc).__name__}: {exc}). Set ONNX_MODEL_DIR to a folder "

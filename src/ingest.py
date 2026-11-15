@@ -8,7 +8,8 @@ Artefacts written
 -----------------
 data/index/chunks.jsonl   one JSON record per chunk (text + metadata)
 data/index/bm25.pkl       pickled BM25 index + tokenised corpus
-chroma/                   persistent vector collection
+data/index/vectors.npz    NumPy cosine index (the Chroma fallback)
+chroma/                   persistent vector collection (optional)
 """
 from __future__ import annotations
 
@@ -238,27 +239,46 @@ def ingest(pdf_path: Path, embed_backend: str | None = None, reset: bool = True)
             {"bm25": bm25, "corpus": corpus, "ids": [c["chunk_id"] for c in chunks]}, fh
         )
 
-    # ---- ChromaDB
-    import chromadb
+    # ---- numpy vector index (always written: the Chroma fallback + portability)
+    from .vectorstore import NumpyVectorIndex
 
-    client = chromadb.PersistentClient(path=str(settings.chroma_dir))
-    if reset:
-        try:
-            client.delete_collection(settings.collection_name)
-        except Exception:
-            pass
-    collection = client.get_or_create_collection(
-        name=settings.collection_name, metadata={"hnsw:space": "l2"}
+    NumpyVectorIndex.from_chunks(
+        settings.index_dir, [c["chunk_id"] for c in chunks], vectors, chunks
     )
-    collection.add(
-        ids=[c["chunk_id"] for c in chunks],
-        embeddings=vectors.tolist(),
-        documents=[c["text"] for c in chunks],
-        metadatas=[
-            {"source": c["source"], "page": c["page"], "chunk_index": c["chunk_index"]}
-            for c in chunks
-        ],
-    )
+
+    # ---- ChromaDB (optional: some Linux/py3.12 wheels ship broken Rust bindings)
+    vector_backend = "chroma"
+    try:
+        import chromadb
+
+        client = chromadb.PersistentClient(path=str(settings.chroma_dir))
+        if reset:
+            try:
+                client.delete_collection(settings.collection_name)
+            except Exception:
+                pass
+        collection = client.get_or_create_collection(
+            name=settings.collection_name, metadata={"hnsw:space": "l2"}
+        )
+        collection.add(
+            ids=[c["chunk_id"] for c in chunks],
+            embeddings=vectors.tolist(),
+            documents=[c["text"] for c in chunks],
+            metadatas=[
+                {"source": c["source"], "page": c["page"], "chunk_index": c["chunk_index"]}
+                for c in chunks
+            ],
+        )
+    except Exception as exc:  # noqa: BLE001 - environment failures must not stop indexing
+        from .vectorstore import is_chroma_bindings_error
+
+        vector_backend = "numpy-fallback"
+        reason = "Rust bindings unavailable" if is_chroma_bindings_error(exc) else f"{type(exc).__name__}: {exc}"
+        print(
+            f"WARNING: ChromaDB unavailable ({reason}); "
+            f"using the NumPy cosine index at {settings.vectors_npz}.",
+            flush=True,
+        )
 
     summary = {
         "pdf": pdf_path.name,
@@ -266,6 +286,7 @@ def ingest(pdf_path: Path, embed_backend: str | None = None, reset: bool = True)
         "chunks": len(chunks),
         "embedder": embedder.name,
         "vector_dim": int(vectors.shape[1]),
+        "vector_backend": vector_backend,
         "chunk_size": settings.chunk_size,
         "chunk_overlap": settings.chunk_overlap,
     }

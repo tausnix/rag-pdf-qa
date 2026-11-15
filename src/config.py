@@ -88,6 +88,11 @@ class Settings:
     def bm25_pickle(self) -> Path:
         return self.index_dir / "bm25.pkl"
 
+    @property
+    def vectors_npz(self) -> Path:
+        """NumPy fallback used when the Chroma native bindings are unavailable."""
+        return self.index_dir / "vectors.npz"
+
     def ensure_dirs(self) -> None:
         for d in (self.raw_dir, self.index_dir, self.eval_dir, self.reports_dir, self.chroma_dir):
             d.mkdir(parents=True, exist_ok=True)
