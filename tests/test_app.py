@@ -154,10 +154,9 @@ def test_trace_renders_metrics_table_and_evidence_inspector(fake_index):
     assert metrics["Projected cost / 1k"] == "$0.10"
 
     table = at.dataframe[0].value
-    assert {"#", "Page", "Movement", "Dense", "BM25", "RRF", "CE logit",
-            "CE Confidence"} <= set(table.columns)
+    assert {"#", "Page", "Movement", "Dense", "BM25", "CE Confidence"} <= set(table.columns)
     assert table["CE Confidence"].between(0.0, 1.0).all()
-    assert table["Movement"].str.contains("Rerank #1").any()
+    assert table["Movement"].str.contains("#1").any()
 
     assert any("<div class='tr-answer'>" in m.value for m in at.markdown)
     assert any("Source Evidence Inspector" in m.value for m in at.markdown)
@@ -203,4 +202,4 @@ def test_preset_runs_a_real_query_end_to_end():
     table = at.dataframe[0].value
     assert "CE Confidence" in table.columns
     assert table["CE Confidence"].max() > 0.5
-    assert any("Rerank #1" in str(v) for v in table["Movement"])
+    assert any("#1" in str(v) for v in table["Movement"])

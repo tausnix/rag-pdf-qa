@@ -139,6 +139,14 @@ CSS = """
   .tr-verdict {font-size: 12.5px; color: #5C574D; margin-top: 4px;}
   .metric-card {border: 1px solid #E4DFD2; border-radius: 12px; padding: 14px 16px;
                 background: #FFFFFF;}
+  /* Metric labels wrap instead of truncating in narrow 4-up columns */
+  [data-testid="stMetricLabel"] {overflow: visible;}
+  [data-testid="stMetricLabel"] p {white-space: normal; line-height: 1.2; font-size: 0.8rem;}
+  [data-testid="stMetricValue"] {font-size: 1.5rem; overflow: visible;}
+  [data-testid="stMetricValue"] > div {overflow: visible; text-overflow: clip; white-space: normal;}
+  [data-testid="stMetric"] {height: auto;}
+  [data-testid="stMetric"] > div {height: auto;}
+  [data-testid="stMetricDelta"] {font-size: 0.75rem;}
   .metric-card h3 {margin: 0 0 4px 0; font-size: 12px; color: #8A8578;
                    font-weight: 600; letter-spacing: .04em;}
   .metric-card p {margin: 0; font-size: 22px; font-weight: 650; color: #1F1E1D;}
@@ -486,17 +494,15 @@ def render_metrics(trace: dict) -> None:
 
     if faith is None:
         c3.metric("Faithfulness / spans", "abstained", border=True,
-                  delta="no answer to verify", delta_color="off")
+                  help="The model refused, so there is no answer to verify.")
     else:
         c3.metric("Faithfulness / spans", f"{faith['score'] * 100:.0f}%", border=True,
-                  delta=f"{faith['supported']}/{faith['sentences']} sentences",
-                  delta_color="off",
-                  help="Lexical support + numeric grounding. See 'How it works'.")
+                  help=f"{faith['supported']}/{faith['sentences']} answer sentences supported. "
+                       "Lexical support + numeric grounding; see 'How it works'.")
 
     basis = "actual usage" if result.get("billable") else "projected list price"
     c4.metric("Projected cost / 1k", f"${result['cost_usd'] * 1000:.2f}", border=True,
-              delta=basis, delta_color="off",
-              help=f"{result['usage']['input_tokens']:,} in / "
+              help=f"{basis}: {result['usage']['input_tokens']:,} in / "
                    f"{result['usage']['output_tokens']:,} out tokens")
 
 
@@ -537,15 +543,22 @@ def render_compare(trace: dict) -> None:
 def render_candidates(trace: dict) -> None:
     rows = []
     for i, h in enumerate(trace["hits"], start=1):
+        # Compact movement for the table; the full "RRF #n -> Rerank #m" label
+        # is already in the answer-card pill.
+        move = "-"
+        rr, rk = h.get("rrf_rank"), h.get("rerank_rank")
+        if rr and rk:
+            move = f"#{rr} → #{rk}"
+            delta = rr - rk
+            if delta:
+                move += f" {'↑' if delta > 0 else '↓'}{abs(delta)}"
         rows.append(
             {
                 "#": i,
                 "Page": h["page"],
-                "Movement": h.get("movement") or "-",
-                "Dense": round(h["dense_score"], 4) if h["dense_score"] is not None else None,
-                "BM25": round(h["bm25_score"], 2) if h["bm25_score"] is not None else None,
-                "RRF": round(h["rrf_score"], 4) if h["rrf_score"] is not None else None,
-                "CE logit": round(h["logit"], 2) if h["logit"] is not None else None,
+                "Movement": move,
+                "Dense": round(h["dense_score"], 3) if h["dense_score"] is not None else None,
+                "BM25": round(h["bm25_score"], 1) if h["bm25_score"] is not None else None,
                 "CE Confidence": h["prob"] if h["prob"] is not None else 0.0,
             }
         )
@@ -555,9 +568,15 @@ def render_candidates(trace: dict) -> None:
         hide_index=True,
         width="stretch",
         column_config={
+            "#": st.column_config.NumberColumn("#", width="small"),
+            "Page": st.column_config.NumberColumn("Page", width="small"),
+            "Movement": st.column_config.TextColumn("Movement", width="small"),
+            "Dense": st.column_config.NumberColumn("Dense", width="small", format="%.3f"),
+            "BM25": st.column_config.NumberColumn("BM25", width="small", format="%.1f"),
             "CE Confidence": st.column_config.ProgressColumn(
-                "CE Confidence", min_value=0.0, max_value=1.0, format="%.3f"
-            )
+                "CE Confidence", min_value=0.0, max_value=1.0, format="%.3f",
+                width="medium",
+            ),
         },
     )
     if trace["mode"] != "Hybrid + rerank":
@@ -733,6 +752,16 @@ def render_report(path: Path, title: str, note: str) -> None:
 # Sidebar
 # --------------------------------------------------------------------------- #
 init_state()
+
+# Deep link: ?q=<question>&mode=<mode> runs once on load. Handy for README/issue
+# links ("open this exact trace"). Must run before the sidebar widgets exist, or
+# assigning to st.session_state["mode"] would raise.
+_deep_q = st.query_params.get("q")
+if _deep_q and st.session_state.get("_deep_link") != _deep_q:
+    st.session_state["_deep_link"] = _deep_q
+    st.session_state["pending_question"] = _deep_q
+    if st.query_params.get("mode") in MODES:
+        st.session_state["mode"] = st.query_params["mode"]
 
 with st.sidebar:
     st.markdown("### :material/verified: TraceRAG")

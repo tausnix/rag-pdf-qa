@@ -5,6 +5,12 @@ question and get a grounded answer with page citations — plus the full trace b
 which chunks were retrieved, how RRF ranked them, where the cross-encoder moved them,
 what the answer cost and whether it is faithful.
 
+![TraceRAG split-screen UI: answer card with PASS badge and rank movement, four metric cards, candidate ranking with cross-encoder confidence bars, and the Source Evidence Inspector](docs/tracerag-hero.png)
+
+*The **Rank rescue** preset: dense + BM25 fusion put the gold page at RRF #2, the
+cross-encoder promoted it to #1, and the inspector on the right shows the exact chunk the
+answer came from with the query terms highlighted.*
+
 Under the hood it is a complete retrieval-augmented generation pipeline: PyPDFLoader ->
 chunks -> `all-MiniLM-L6-v2` + BM25 -> Reciprocal Rank Fusion -> optional `ms-marco`
 cross-encoder rerank -> Gemini Flash, plus a 225-query benchmark harness that reports Hit
@@ -251,6 +257,10 @@ The **Benchmark** tab renders the 3-way tables, latency split, rerank lift and g
 cost straight from `reports/squad_benchmark.json` and `reports/benchmark.json`; no metric
 is typed into the UI.
 
+Any trace is **deep-linkable**: `?q=<question>&mode=<mode>` runs once on load, so a README
+or an issue can point at the exact run it is discussing
+(`/?q=What+was+the+reported+headcount+for+Meridian+Depot%3F&mode=Hybrid+%2B+rerank`).
+
 **Gemini free tier** — calls are paced at `GEMINI_MIN_INTERVAL_S` (4 s ≈ 15 RPM), a 429 is
 retried using `RetryInfo`/`Retry-After` before exponential backoff, and every successful
 response is cached by `sha256(model + temperature + prompt)` under
@@ -421,6 +431,7 @@ regression fails the build instead of silently changing the published numbers.
 rag-pdf-qa/
 ├── app.py                     # TraceRAG: split-screen answer + evidence inspector
 ├── .streamlit/config.toml     # warm editorial light theme
+├── docs/tracerag-hero.png     # README screenshot (real app, no mockup)
 ├── run_pipeline.py            # corpus -> index -> benchmark -> report
 ├── requirements.txt
 ├── .github/workflows/ci.yml   # tests + full pipeline on every push
