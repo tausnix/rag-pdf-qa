@@ -38,6 +38,9 @@ Rules:
 2. If the context does not contain the answer, reply exactly: "{refusal}"
 3. Be concise (1-3 sentences). Quote exact figures, names and units.
 4. Cite the page numbers you used in the form [p.N] at the end of the answer.
+5. Answer from the highest-ranked passage. If passages disagree, report the
+   top passage's figure and say the others differ - never merge figures from
+   different passages into one sentence.
 """.format(refusal=REFUSAL)
 
 
