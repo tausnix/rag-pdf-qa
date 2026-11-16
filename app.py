@@ -116,9 +116,8 @@ CSS = """
   .tr-move {font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
             font-size: 11.5px; color: #7A4A2E; background: #F6EDE4;
             border: 1px solid #E5D3C2; border-radius: 6px; padding: 2px 7px;}
-  .tr-cite {display: inline; background: #F0EEE6; border: 1px solid #DED8C8;
-            color: #8A4B2F; padding: 0 6px; border-radius: 999px;
-            font-size: 12px; font-weight: 600; white-space: nowrap;}
+  .tr-cite {color: #8A4B2F; font-weight: 600; font-size: 12.5px;
+            white-space: nowrap;}
   .tr-chunk {background: #FAF9F5; border: 1px solid #E4DFD2; border-radius: 12px;
              padding: 14px 16px; font-size: 13.5px; line-height: 1.7; color: #2B2926;
              max-height: 380px; overflow-y: auto;}
@@ -299,10 +298,15 @@ def highlight(text: str, question: str, limit: int = 1400) -> str:
 
 
 def answer_markup(text: str) -> str:
-    """Escape the model output, then style [p.N] citations."""
+    """Escape the model output, then style [p.N] citations.
+
+    The citation stays *inline text* (no padding or border), so a comma or full
+    stop that follows it sits on the same baseline instead of being pushed away
+    by a pill box.
+    """
     safe = re.sub(
         r"\[p\.(\d+)\]",
-        r"<span class='tr-cite'>p.\1</span>",
+        r"<span class='tr-cite'>[p.\1]</span>",
         html.escape(text),
     )
     return safe.replace("\n", "<br>")
